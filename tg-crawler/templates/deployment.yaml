@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tg-crawler
+spec:
+  strategy:
+    type: Recreate
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: tg-crawler
+  template:
+    metadata:
+      labels:
+        app: tg-crawler
+        vector/transformer: spring-boot-default-logback-layout-converter
+    spec:
+      containers:
+        - name: tg-crawler
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config/application.yaml
+              subPath: application.yaml
+            {{- if .Values.persistence.enabled }}
+            - name: session-volume
+              mountPath: {{ .Values.persistence.mountPath }}
+            {{- end }}
+          envFrom:
+            - secretRef:
+                name: tg-crawler-secrets
+                optional: true
+            - configMapRef:
+                name: tg-crawler-env
+                optional: true
+      imagePullSecrets:
+        - name: openprojectx-registry-secret
+      volumes:
+        - name: config-volume
+          configMap:
+            name: tg-crawler-config
+
+        {{- if .Values.persistence.enabled }}
+        - name: session-volume
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.volumeName }}
+        {{- end }}

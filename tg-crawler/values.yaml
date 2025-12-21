@@ -1,0 +1,41 @@
+replicaCount: 1
+
+image:
+  repository: harbor.k8s.openprojectx.org/openprojectx/tg-crawler
+  tag: ec69e381
+  pullPolicy: IfNotPresent
+
+persistence:
+  enabled: true
+  accessModes: [ "ReadWriteMany" ]
+  storageClassName: "rook-cephfs"
+  size: 16Gi
+  mountPath: "/app/tg-session"
+  volumeName: tg-crawler-session
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: tg-crawler.openprojectx.cn-guangzhou-a.k8s.openprojectx.org
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    enabled: true
+    secretName: tg-crawler-tls  # this secret must exist in the same namespace
+
+
+resources: {}
+
+config:
+  applicationYaml: |
+    server:
+      port: 8080
+    spring:
+      application:
+        name: tg-crawler

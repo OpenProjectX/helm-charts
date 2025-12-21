@@ -1,0 +1,140 @@
+replicaCount: 1
+
+image:
+  repository: openidentityplatform/opendj
+  tag: "5.0.2"
+
+persistence:
+  enabled: false
+#  mount:
+#    mountPath: /opt/opendj/data
+#  pvc:
+#    accessModes: [ "ReadWriteOnce" ]
+#    storageClassName: "openebs-lvm"
+#    size: 1Gi
+
+#volumeMounts:
+#  - name: ldif
+#    mountPath: /opt/opendj/bootstrap/config/schema/bootstrap.ldif
+#    subPath: bootstrap.ldif
+#    readOnly: true
+#
+#volumes:
+#  - name: ldif
+#    secret:
+#      secretName: opendj-bootstrap
+#      optional: true
+
+
+secretMounts:
+  - name: tls-keystore
+    secretName: wildcard.openprojectx.org-tls
+    mountPath: /opt/opendj/keystore
+
+securityContext:
+  fsGroup: 1000
+
+env:
+  - name: BASE_DN
+    value: dc=openprojectx,dc=org
+  - name: ROOT_USER_DN
+    value: cn=admin
+  - name: ROOT_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: opendj-bootstrap
+        key: opendj-admin
+
+  - name: BACKEND_TYPE
+    value: jdbc
+  - name: BACKEND_DB_DIRECTORY
+    valueFrom:
+      secretKeyRef:
+        name: infra-pg-pguser-opendj-user
+        key: pgbouncer-jdbc-uri
+  - name: OPENDJ_SSL_OPTIONS
+    valueFrom:
+      secretKeyRef:
+        name: opendj-bootstrap
+        key: OPENDJ_SSL_OPTIONS
+
+service:
+  type: LoadBalancer
+  ports:
+    - name: ldap
+      protocol: TCP
+      port: 1389
+      targetPort: 1389
+    - name: ldaps
+      protocol: TCP
+      port: 1636
+      targetPort: 1636
+    - name: admin-ldaps
+      protocol: TCP
+      port: 4444
+      targetPort: 4444
+
+#todo use opendj builtin import  https://github.com/OpenIdentityPlatform/OpenDJ/blob/a06b8cb1b003928614eb8898b706fd29684224e9/opendj-packages/opendj-docker/bootstrap/setup.sh#L11
+bootstrap:
+  job:
+    enabled: true
+    ttlSecondsAfterFinished: 180
+#    debugSleepSeconds: 0
+    hook: post-install
+    weight: 10
+    deletePolicy: hook-succeeded
+
+    image: osixia/openldap:1.5.0
+
+    command:
+      - sh
+      - -c
+
+    args:
+      - |
+        set -e
+        
+        echo "Waiting for OpenDJ base DN to be available..."
+        
+        until ldapsearch -x \
+        -H ldap://opendj-opendj:1389 \
+        -D "$LDAP_BIND_DN" \
+        -w "$LDAP_ADMIN_PASSWORD" \
+        -b "" \
+        -s base \
+        namingContexts | grep -q  "dc=openprojectx,dc=org"
+        do
+        sleep 2
+        done
+        
+        sleep 16
+        
+        echo "Running bootstrap LDIF"
+        ldapadd -v \
+          -H ldap://opendj-opendj:1389 \
+          -x \
+          -D "$LDAP_BIND_DN" \
+          -w "$LDAP_ADMIN_PASSWORD" \
+          -f /ldif/bootstrap.ldif \
+          || echo "ldapadd returned non-zero (entries may already exist)"
+        
+#        sleep 3600
+
+    env:
+      - name: LDAP_BIND_DN
+        value: cn=admin
+      - name: LDAP_ADMIN_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: opendj-bootstrap
+            key: opendj-admin
+
+    volumeMounts:
+      - name: ldif
+        mountPath: /ldif
+        readOnly: true
+
+    volumes:
+      - name: ldif
+        secret:
+          secretName: opendj-bootstrap

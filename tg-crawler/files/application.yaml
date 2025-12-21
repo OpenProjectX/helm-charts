@@ -1,0 +1,46 @@
+management:
+  endpoint:
+    health:
+      show-details: always  # or "when-authorized"
+  endpoints:
+    web:
+      exposure:
+        include: health,info  # or "*"
+
+spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    #    url: jdbc:yugabytedb://192.168.0.130:5433/tg_crawler_dev?load-balance=true
+    url: jdbc:postgresql://192.168.0.130:5433/tg_crawler
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      data-source-properties:
+        stringtype: unspecified
+#  r2dbc:
+#    url: r2dbc:postgresql://192.168.0.130:5433/tg_crawler
+#    username: ${DB_USER}
+#    password: ${DB_PASSWORD}
+  security:
+    user:
+      name: user
+      password: '{bcrypt}$2a$10$dv1Ja66cWtRM3xx9V4KjCO9iAt0x72ghgUp0nypyWrKhnlfPXZXOS'
+  elasticsearch:
+    password: ${ELASTICSEARCH_PASSWORD}
+    username: ${ELASTICSEARCH_USER}
+    uris: https://elasticsearch.devops.cn-guangzhou-a.k8s.openprojectx.org
+
+#es:
+#  index-suffix: _dev
+#opensearch:
+#  uris: https://elasticsearch.devops.cn-guangzhou-a.k8s.openprojectx.org
+#  username: admin
+#  password: admin
+
+
+#debug: true
+
+logging:
+  level:
+    #    root: trace
+    it.tdlight.TDLight: warn

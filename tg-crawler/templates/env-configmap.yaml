@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tg-crawler-env
+data:
+  TG_SESSION_PATH: "/app/tg-session"
+  http_proxy: "http://192.168.0.89:10809"
+
+

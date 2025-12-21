@@ -1,0 +1,5 @@
+{{ include "common.bootstrapJob" (dict
+    "root" .
+    "name" "ldap-bootstrap"
+    "spec" .Values.bootstrap.job
+) }}

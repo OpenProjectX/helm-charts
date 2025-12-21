@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tg-crawler-config
+data:
+  application.yaml: |-
+    {{ .Files.Get "files/application.yaml" | nindent 4 }}

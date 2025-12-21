@@ -1,0 +1,109 @@
+# Base DN
+dn: dc=openprojectx,dc=org
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: openprojectx
+o: OpenProjectX
+
+# Organizational Units
+dn: ou=people,dc=openprojectx,dc=org
+objectClass: top
+objectClass: organizationalUnit
+ou: people
+
+dn: ou=apps,dc=openprojectx,dc=org
+objectClass: top
+objectClass: organizationalUnit
+ou: apps
+
+dn: ou=groups,dc=openprojectx,dc=org
+objectClass: top
+objectClass: organizationalUnit
+ou: groups
+
+
+#5.3 Groups (Departments & Roles)
+dn: cn=it,ou=groups,dc=openprojectx,dc=org
+objectClass: groupOfNames
+cn: it
+member: cn=dummy,dc=openprojectx,dc=org
+
+dn: cn=sales,ou=groups,dc=openprojectx,dc=org
+objectClass: groupOfNames
+cn: sales
+member: cn=dummy,dc=openprojectx,dc=org
+
+dn: cn=hr,ou=groups,dc=openprojectx,dc=org
+objectClass: groupOfNames
+cn: hr
+member: cn=dummy,dc=openprojectx,dc=org
+
+dn: cn=apps,ou=groups,dc=openprojectx,dc=org
+objectClass: groupOfNames
+cn: apps
+member: cn=dummy,dc=openprojectx,dc=org
+
+
+#5.4 Human Users
+dn: uid=alice,ou=people,dc=openprojectx,dc=org
+objectClass: top
+objectClass: inetOrgPerson
+objectClass: posixAccount
+cn: Alice Zhang
+sn: Zhang
+uid: alice
+mail: alice@openprojectx.org
+uidNumber: 10001
+gidNumber: 10000
+homeDirectory: /home/alice
+loginShell: /bin/bash
+userPassword: REPLACE_IT
+
+dn: uid=bob,ou=people,dc=openprojectx,dc=org
+objectClass: top
+objectClass: inetOrgPerson
+objectClass: posixAccount
+cn: Bob Li
+sn: Li
+uid: bob
+mail: bob@openprojectx.org
+uidNumber: 10002
+gidNumber: 10000
+homeDirectory: /home/bob
+loginShell: /bin/bash
+userPassword: REPLACE_IT
+
+#5.5 Application Accounts
+dn: uid=spark-job-runner,ou=apps,dc=openprojectx,dc=org
+objectClass: top
+objectClass: account
+objectClass: simpleSecurityObject
+uid: spark-job-runner
+description: Spark batch job service account
+userPassword: REPLACE_IT
+
+
+dn: uid=ci-bot,ou=apps,dc=openprojectx,dc=org
+objectClass: top
+objectClass: account
+objectClass: simpleSecurityObject
+uid: ci-bot
+description: CI/CD automation bot
+userPassword: REPLACE_IT
+
+# 5.6 Group Memberships
+dn: cn=it,ou=groups,dc=openprojectx,dc=org
+changetype: modify
+add: member
+member: uid=alice,ou=people,dc=openprojectx,dc=org
+
+
+dn: cn=apps,ou=groups,dc=openprojectx,dc=org
+changetype: modify
+add: member
+member: uid=spark-job-runner,ou=apps,dc=openprojectx,dc=org
+member: uid=ci-bot,ou=apps,dc=openprojectx,dc=org
+
+
+
