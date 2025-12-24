@@ -1,0 +1,36 @@
+apiVersion: v1
+entries:
+  common:
+  - apiVersion: v2
+    created: "2025-12-24T21:06:16.368076754+08:00"
+    digest: 010ab83966600721597436b008dc34ce3c8020d949521192a4c66800a8119053
+    name: common
+    type: library
+    urls:
+    - https://github.com/OpenProjectX/helm-charts/releases/download/v0.1.0/common-1.0.0.tgz
+    version: 1.0.0
+  opendj:
+  - apiVersion: v2
+    appVersion: 0.1.0
+    created: "2025-12-24T21:06:16.368537031+08:00"
+    dependencies:
+    - name: common
+      repository: file://../common
+      version: 1.0.0
+    description: OpenDJ
+    digest: 78dc895cb94b1effacf47590643bac724f1135f0316b06cf28ef60d4fe3d216a
+    name: opendj
+    urls:
+    - https://github.com/OpenProjectX/helm-charts/releases/download/v0.1.0/opendj-0.1.0.tgz
+    version: 0.1.0
+  tg-crawler:
+  - apiVersion: v2
+    appVersion: 0.1.0
+    created: "2025-12-24T21:06:16.368709346+08:00"
+    description: A Helm chart for the tg-crawler Spring Boot app
+    digest: f5c6fb998a127ced2eff552fb37a9e32a79ffbf283408c1e1de7338be3a5efe5
+    name: tg-crawler
+    urls:
+    - https://github.com/OpenProjectX/helm-charts/releases/download/v0.1.0/tg-crawler-0.1.0.tgz
+    version: 0.1.0
+generated: "2025-12-24T21:06:16.36785175+08:00"
