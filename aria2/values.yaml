@@ -1,0 +1,71 @@
+
+image:
+  repository: hurlenko/aria2-ariang
+  tag: "latest"
+
+persistence:
+  enabled: false
+  mount:
+    mountPath: /aria2/data
+#  pvc:
+#    accessModes: [ "ReadWriteOnce" ]
+#    storageClassName: "openebs-lvm"
+#    size: 1Gi
+
+volumeMounts:
+  - name: downloads
+    mountPath: /aria2/data
+
+  - name: aria2-conf
+    mountPath: /aria2/conf
+
+  - name: startup
+    mountPath: /startup
+
+volumes:
+  - name: downloads
+    hostPath:
+      path: /srv/media/aria2
+      type: DirectoryOrCreate
+
+  - name: aria2-conf
+    configMap:
+        name: aria2-conf
+
+
+
+  - name: startup
+    configMap:
+      name: aria2-startup
+      defaultMode: 0755
+
+securityContext:
+  fsGroup: 1000
+
+env:
+  - name: PUID
+    value: "1000"
+  - name: PGID
+    value: "1000"
+  - name: ARIA2RPCPORT
+    value: "443"
+
+
+command:
+  - "/bin/sh"
+  - "/startup/start.sh"
+
+
+
+service:
+  type: ClusterIP
+  ports:
+    - name: ui-rpc
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+    - name: rpc
+      protocol: TCP
+      port: 6800
+      targetPort: 6800
+

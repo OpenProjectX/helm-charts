@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aria2-startup
+data:
+  start.sh: |
+    #!/bin/sh
+    set -euo pipefail
+
+    CONF_FILE="/aria2/conf/aria2.conf"
+    DATA_DIR="/aria2/data"
+    SESSION_FILE="${DATA_DIR}/aria2.session"
+    CADDYFILE="/usr/local/caddy/Caddyfile"
+    ariang_js_path=/usr/local/www/ariang/js/aria-ng*.js
+
+    # ---- sanity checks ---------------------------------------------
+
+    if [ ! -f "${CONF_FILE}" ]; then
+      echo "FATAL: aria2.conf not found at ${CONF_FILE}" >&2
+      exit 1
+    fi
+
+    if [ ! -w "${DATA_DIR}" ]; then
+      echo "FATAL: ${DATA_DIR} is not writable" >&2
+      exit 1
+    fi
+
+    if [[ -n "$ARIA2RPCPORT" ]]; then
+    echo "Changing rpc request port to $ARIA2RPCPORT"
+    sed -i "s/6800/${ARIA2RPCPORT}/g" $ariang_js_path
+    fi
+
+    # ---- runtime state ---------------------------------------------
+
+    touch "${SESSION_FILE}"
+
+    # ---- start caddy (AriaNg UI) -----------------------------------
+
+    echo "Starting Caddy (AriaNg UI)"
+    caddy start \
+      --config "${CADDYFILE}" \
+      --adapter caddyfile
+
+    # ---- exec aria2 (PID 1) ----------------------------------------
+
+    exec aria2c \
+      --conf-path="${CONF_FILE}" \
+      --save-session="${SESSION_FILE}" \
+      --input-file="${SESSION_FILE}"

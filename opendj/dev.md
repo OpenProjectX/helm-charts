@@ -5,6 +5,10 @@ helm template .
 
 helm install opendj ./ --namespace it
 
+helm install opendj openprojectx/opendj --namespace it
+
+
+
 helm upgrade opendj ./ --namespace it
 
 helm uninstall opendj  --namespace it
@@ -66,6 +70,9 @@ ldapsearch -x -H $LDAP_URI \
 ldapsearch -x -H $LDAP_URI \
   -b "ou=apps,$BASE_DN" "(objectClass=account)" 
   
+ldapsearch -x -H $LDAP_URI \
+  -b "dc=openprojectx,dc=org" "(objectClass=*)"   dn uid mail  entryUUID     
+  
 #2.3 List all groups
 ldapsearch -x -H $LDAP_URI \
   -b "ou=groups,$BASE_DN" "(objectClass=groupOfNames)" cn
@@ -99,6 +106,23 @@ loginShell: /bin/bash
 userPassword: REPLACE_ME
 EOF
 
+ldapadd -x -H $LDAP_URI \
+  -D "$ADMIN_DN" -w "$ADMIN_PW" <<EOF
+dn: uid=admin,ou=people,dc=openprojectx,dc=org
+objectClass: top
+objectClass: inetOrgPerson
+objectClass: posixAccount
+cn: Admin
+sn: X
+uid: admin
+mail: admin@openprojectx.org
+uidNumber: 10001
+gidNumber: 10000
+homeDirectory: /home/admin
+loginShell: /bin/bash
+userPassword: 114514
+EOF
+
 #3.2 Disable a user (soft lock, best practice)
 ldapmodify -x -H $LDAP_URI \
   -D "$ADMIN_DN" -w "$ADMIN_PW" <<EOF
@@ -111,7 +135,7 @@ EOF
 #3.3 Reset a password
 ldappasswd -x -H $LDAP_URI \
   -D "$ADMIN_DN" -w "$ADMIN_PW" \
-  "uid=alice,ou=people,$BASE_DN"
+  "uid=admin,ou=people,$BASE_DN"
 
 #3.4 Delete a user
 ldapdelete -x -H $LDAP_URI \
@@ -125,6 +149,14 @@ dn: cn=finance,ou=groups,$BASE_DN
 objectClass: groupOfNames
 cn: finance
 member: uid=alice,ou=people,$BASE_DN
+EOF
+
+ldapadd -x -H $LDAP_URI \
+  -D "$ADMIN_DN" -w "$ADMIN_PW" <<EOF
+dn: cn=admin,ou=groups,dc=openprojectx,dc=org
+objectClass: groupOfNames
+cn: admin
+member: uid=admin,ou=people,dc=openprojectx,dc=org
 EOF
 
 #4.2 Add a user to a group
