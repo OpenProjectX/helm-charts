@@ -21,6 +21,11 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - containerPort: 8080
+
+          {{- with .Values.resources }}
+          resources:
+            {{ toYaml . | nindent 16 }}
+          {{- end }}
           volumeMounts:
             - name: config-volume
               mountPath: /app/config/application.yaml
@@ -36,12 +41,15 @@ spec:
             - configMapRef:
                 name: tg-crawler-env
                 optional: true
+      {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
-        - name: openprojectx-registry-secret
+        {{ toYaml . | nindent 8 }}
+      {{- end }}
       volumes:
         - name: config-volume
           configMap:
             name: tg-crawler-config
+            optional: true
 
         {{- if .Values.persistence.enabled }}
         - name: session-volume

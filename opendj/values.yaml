@@ -2,16 +2,16 @@ replicaCount: 1
 
 image:
   repository: openidentityplatform/opendj
-  tag: "5.0.2"
+  tag: "5.0.3"
 
 persistence:
-  enabled: false
-#  mount:
-#    mountPath: /opt/opendj/data
-#  pvc:
-#    accessModes: [ "ReadWriteOnce" ]
-#    storageClassName: "openebs-lvm"
-#    size: 1Gi
+  enabled: true
+  mount:
+    mountPath: /opt/opendj/data
+  pvc:
+    accessModes: [ "ReadWriteOnce" ]
+    storageClassName: "openebs-lvm"
+    size: 4Gi
 
 #volumeMounts:
 #  - name: ldif
@@ -46,12 +46,13 @@ env:
         key: opendj-admin
 
   - name: BACKEND_TYPE
-    value: jdbc
+    value: je
   - name: BACKEND_DB_DIRECTORY
-    valueFrom:
-      secretKeyRef:
-        name: infra-pg-pguser-opendj-user
-        key: pgbouncer-jdbc-uri
+    value: /opt/opendj/data
+#    valueFrom:
+#      secretKeyRef:
+#        name: infra-pg-pguser-opendj-user
+#        key: pgbouncer-jdbc-uri
   - name: OPENDJ_SSL_OPTIONS
     valueFrom:
       secretKeyRef:

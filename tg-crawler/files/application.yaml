@@ -11,24 +11,59 @@ spring:
   datasource:
     driver-class-name: org.postgresql.Driver
     #    url: jdbc:yugabytedb://192.168.0.130:5433/tg_crawler_dev?load-balance=true
-    url: jdbc:postgresql://192.168.0.130:5433/tg_crawler
+    url: jdbc:postgresql://192.168.0.145:5433/tg_crawler
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     hikari:
       data-source-properties:
         stringtype: unspecified
-#  r2dbc:
-#    url: r2dbc:postgresql://192.168.0.130:5433/tg_crawler
-#    username: ${DB_USER}
-#    password: ${DB_PASSWORD}
+  #    type: com.yugabyte.ds.PGPoolingDataSource
+  r2dbc:
+    url: r2dbc:postgresql://192.168.0.145:5433/tg_crawler
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  flyway:
+    url: jdbc:postgresql://192.168.0.145:5433/tg_crawler
+    user: ${DB_USER}
+    password: ${DB_PASSWORD}
   security:
     user:
       name: user
       password: '{bcrypt}$2a$10$dv1Ja66cWtRM3xx9V4KjCO9iAt0x72ghgUp0nypyWrKhnlfPXZXOS'
+    oauth2:
+      client:
+        registration:
+          azure:
+            client-id: ${AZURE_CLIENT_ID}
+            client-secret: ${AZURE_CLIENT_SECRET}
+            authorization-grant-type: authorization_code
+            scope:
+#              - openid
+#              - profile
+#              - User.Read
+#              - Files.ReadWrite
+              - Files.ReadWrite.All
+              - offline_access
+#              - https://graph.microsoft.com/Files.ReadWrite.All
+#              - https://graph.microsoft.com/User.Read
+            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
+        provider:
+          #          ondrive-opx:
+          #            authorization-uri: https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/authorize
+          #            token-uri: https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/token
+          #            user-info-uri: https://graph.microsoft.com/oidc/userinfo
+          azure:
+            authorization-uri: https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize
+            token-uri: https://login.microsoftonline.com/consumers/oauth2/v2.0/token
+            user-info-uri: https://graph.microsoft.com/oidc/userinfo
+            user-name-attribute: sub
+#            jwk-set-uri: https://login.microsoftonline.com/consumers/discovery/v2.0/keys
+
+
   elasticsearch:
     password: ${ELASTICSEARCH_PASSWORD}
     username: ${ELASTICSEARCH_USER}
-    uris: https://elasticsearch.devops.cn-guangzhou-a.k8s.openprojectx.org
+    uris: https://elasticsearch.openprojectx.cn-guangzhou-a.k8s.openprojectx.org
 
 #es:
 #  index-suffix: _dev
@@ -44,3 +79,32 @@ logging:
   level:
     #    root: trace
     it.tdlight.TDLight: warn
+
+storage:
+  providers:
+    #    aws:
+    #      region: ap-southeast-1
+    #      # endpoint omitted => real AWS
+    #      pathStyle: false
+    #      accessKey: ${AWS_ACCESS_KEY_ID:}
+    #      secretKey: ${AWS_SECRET_ACCESS_KEY:}
+    #      buckets:
+    #        - name: tg-crawler
+    #          prefix: media
+    r2:
+      type: S3
+      region: auto
+      endpoint: ${R2_ENDPOINT:}
+      pathStyle: true
+      accessKey: ${R2_ACCESS_KEY:}
+      secretKey: ${R2_SECRET_KEY:}
+      buckets:
+        - tg-crawler
+
+
+    onedrive:
+      type: ONEDRIVE
+      endpoint: https://graph.microsoft.com/v1.0
+      principal: ${ONEDRIVE_PRINCIPAL:}
+      buckets:
+        - tg-crawler

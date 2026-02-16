@@ -3,3 +3,10 @@ name: tg-crawler
 description: A Helm chart for the tg-crawler Spring Boot app
 version: 0.1.0
 appVersion: "0.1.0"
+
+dependencies:
+  - name: http-route
+    version: 1.4.1
+    repository: "file://../http-route"
+    condition: http-route.enabled
+

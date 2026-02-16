@@ -1,0 +1,16 @@
+endpoint:
+  alias: openprojectx
+  url: https://s3.cn-guangzhou-a.k8s.openprojectx.org
+
+policies:
+  dify-full:
+    file: dify-access.json
+
+users:
+  - name: dify
+    secret: dify-secret
+    policies:
+      - dify-full
+
+buckets:
+  - name: dify

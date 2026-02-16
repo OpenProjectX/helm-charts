@@ -1,0 +1,4 @@
+apiVersion: v2
+name: http-route
+version: 1.4.1
+description: Gateway Http Route

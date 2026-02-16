@@ -1,15 +1,17 @@
 replicaCount: 1
 
+imagePullSecrets:
+  - name: ghcr-pull-secret
 image:
-  repository: harbor.k8s.openprojectx.org/openprojectx/tg-crawler
-  tag: ec69e381
+  repository: ghcr.io/openprojectx/tg-crawler
+  tag: 0.1.0-SNAPSHOT-61137e21
   pullPolicy: IfNotPresent
 
 persistence:
   enabled: true
   accessModes: [ "ReadWriteMany" ]
-  storageClassName: "rook-cephfs"
-  size: 16Gi
+  storageClassName: "ceph-filesystem"
+  size: 32Gi
   mountPath: "/app/tg-session"
   volumeName: tg-crawler-session
 
@@ -18,7 +20,7 @@ service:
   port: 8080
 
 ingress:
-  enabled: true
+  enabled: false
   className: nginx
   hosts:
     - host: tg-crawler.openprojectx.cn-guangzhou-a.k8s.openprojectx.org
@@ -29,8 +31,21 @@ ingress:
     enabled: true
     secretName: tg-crawler-tls  # this secret must exist in the same namespace
 
+http-route:
+  enabled: true
+  namespace: openprojectx
+  service:  tg-crawler
+  hostname: tg-crawler.openprojectx.cn-guangzhou-a.k8s.openprojectx.org
+  port: 8080
 
-resources: {}
+resources:
+  requests:
+    cpu: 4
+    memory: 1Gi
+  limits:
+    cpu: 8
+    memory: 8Gi
+
 
 config:
   applicationYaml: |

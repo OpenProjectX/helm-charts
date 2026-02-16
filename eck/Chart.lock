@@ -1,0 +1,9 @@
+dependencies:
+- name: http-route
+  repository: file://../http-route
+  version: 1.4.1
+- name: http-route
+  repository: file://../http-route
+  version: 1.4.1
+digest: sha256:ea51de6f75d07fcd10f85e163f8b3b78541ee30bfc3875d120f8187d50a835ae
+generated: "2026-02-15T18:03:15.767868541+08:00"

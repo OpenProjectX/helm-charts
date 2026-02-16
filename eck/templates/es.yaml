@@ -1,0 +1,39 @@
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: {{.Values.name}}-es
+spec:
+  version: {{.Values.version}}
+  http:
+    tls:
+      selfSignedCertificate:
+        disabled: true
+  nodeSets:
+    - name: default
+      count: 3
+      config:
+        node.roles: [ "master", "data", "ingest" ]
+        node.store.allow_mmap: false
+      volumeClaimTemplates:
+        - metadata:
+            name: elasticsearch-data
+          spec:
+            accessModes: [ "ReadWriteOnce" ]
+            resources:
+              requests:
+                storage: 128Gi
+            storageClassName: openebs-hdd-lvm
+
+      podTemplate:
+        spec:
+          containers:
+            - name: elasticsearch
+#              env:
+#                - name: ES_JAVA_OPTS
+#                  value: -Xms2g -Xmx2g
+              resources:
+                requests:
+                  memory: 2Gi
+                  cpu: 2
+                limits:
+                  memory: 4Gi

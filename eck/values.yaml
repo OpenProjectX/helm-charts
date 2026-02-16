@@ -1,0 +1,20 @@
+name: elasticsearch
+version: 9.2.5
+
+
+kibana-route:
+  enabled: true
+#  fullnameOverride: kibana-route
+  namespace: openprojectx
+  service: elasticsearch-kibana-kb-http
+  hostname: kibana.openprojectx.cn-guangzhou-a.k8s.openprojectx.org
+  port: 5601
+  insecureSkipVerify: true
+
+es-route:
+  enabled: true
+  namespace: openprojectx
+#  fullnameOverride: es-route
+  service: elasticsearch-es-es-http
+  hostname: elasticsearch.openprojectx.cn-guangzhou-a.k8s.openprojectx.org
+  port: 9200

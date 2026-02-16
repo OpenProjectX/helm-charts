@@ -1,0 +1,17 @@
+apiVersion: v2
+name: eck
+version: 0.1.0
+description: eck
+
+dependencies:
+  - name: http-route
+    alias: kibana-route
+    version: 1.4.1
+    repository: "file://../http-route"
+    condition: kibana-route.enabled
+  - name: http-route
+    alias: es-route
+    version: 1.4.1
+    repository: "file://../http-route"
+    condition: es-route.enabled
+

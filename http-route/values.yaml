@@ -1,0 +1,5 @@
+namespace: todo
+service: todo
+hostname: todo
+port: todo
+insecureSkipVerify: false
