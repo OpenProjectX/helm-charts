@@ -82,5 +82,5 @@ jobs:
           tags: |
             ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}:${{ steps.version.outputs.version }}
             ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}:latest
-          cache-from: type=registry,ref=ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}:buildcache
-          cache-to: type=registry,ref=ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}:buildcache,mode=max
+          cache-from: type=registry,ref=ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}-cache:latest
+          cache-to: type=registry,ref=ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}-cache:latest,mode=max
