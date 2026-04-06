@@ -1,3 +1,5 @@
+env: cn-guangzhou-a
+
 replicaCount: 1
 
 imagePullSecrets:

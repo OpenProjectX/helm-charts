@@ -1,0 +1,4 @@
+namespace: openprojectx
+service: elasticsearch-es-es-http
+hostname: elasticsearch.cn-guangzhou-a.openprojectx.org
+port: 9200

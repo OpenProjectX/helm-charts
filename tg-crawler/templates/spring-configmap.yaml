@@ -4,4 +4,4 @@ metadata:
   name: tg-crawler-config
 data:
   application.yaml: |-
-    {{ .Files.Get "files/application.yaml" | nindent 4 }}
+    {{ .Files.Get (printf "files/%s/application.yaml" .Values.env) | nindent 4 }}

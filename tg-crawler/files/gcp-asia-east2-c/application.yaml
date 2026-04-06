@@ -11,7 +11,7 @@ spring:
   datasource:
     driver-class-name: org.postgresql.Driver
     #    url: jdbc:yugabytedb://192.168.0.130:5433/tg_crawler_dev?load-balance=true
-    url: jdbc:postgresql://192.168.0.145:5433/tg_crawler
+    url: jdbc:postgresql://yugabyte.cn-guangzhou-a.openprojectx.org:5433/tg_crawler
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     hikari:
@@ -19,11 +19,11 @@ spring:
         stringtype: unspecified
   #    type: com.yugabyte.ds.PGPoolingDataSource
   r2dbc:
-    url: r2dbc:postgresql://192.168.0.145:5433/tg_crawler
+    url: r2dbc:postgresql://yugabyte.cn-guangzhou-a.openprojectx.org:5433/tg_crawler
     username: ${DB_USER}
     password: ${DB_PASSWORD}
   flyway:
-    url: jdbc:postgresql://192.168.0.145:5433/tg_crawler
+    url: jdbc:postgresql://yugabyte.cn-guangzhou-a.openprojectx.org:5433/tg_crawler
     user: ${DB_USER}
     password: ${DB_PASSWORD}
   security:
@@ -63,7 +63,7 @@ spring:
   elasticsearch:
     password: ${ELASTICSEARCH_PASSWORD}
     username: ${ELASTICSEARCH_USER}
-    uris: https://elasticsearch.openprojectx.cn-guangzhou-a.k8s.openprojectx.org
+    uris: https://elasticsearch.cn-guangzhou-a.openprojectx.org:1443
 
 #es:
 #  index-suffix: _dev
@@ -79,6 +79,38 @@ logging:
   level:
     #    root: trace
     it.tdlight.TDLight: warn
+    "org.openprojectx.crawler.tg.repository.BatchMessageRepository": warn
+    "org.openprojectx.crawler.tg.service.MediaService": warn
+#    org.springframework.security: trace
+reconcile:
+  enabled: true
+  message:
+    enabled: true
+    include-patterns:
+      - .*
+      - (?i).*广州.*
+      - (?i).*天河.*
+      - (?i).*深圳.*
+      - (?i).*佛山.*
+    exclude-chats:
+      - -1001671038041
+      - -1001357277385
+      - -1001471136269
+      - -1002410713332
+      - -1002236991873
+      - -1001802894666
+      - -1001865979365
+      - -1001208185234
+      - -1001961065627
+  media:
+    enabled: false
+    max-concurrent-chat-sync: 1
+    max-concurrent-media-sync: 1
+
+
+    pending-chat-buffer: 1024
+
+
 
 storage:
   providers:

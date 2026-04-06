@@ -34,13 +34,18 @@ spec:
             - name: session-volume
               mountPath: {{ .Values.persistence.mountPath }}
             {{- end }}
+          # ── Bulk env from ConfigMap / Secret ────────────
+          {{- if .Values.extraEnvFrom }}
           envFrom:
-            - secretRef:
-                name: tg-crawler-secrets
-                optional: true
-            - configMapRef:
-                name: tg-crawler-env
-                optional: true
+            {{- toYaml .Values.extraEnvFrom | nindent 12 }}
+          {{- end }}
+          env:
+            - name: SPRING_APPLICATION_NAME
+              value: tg-crawler
+            # User-provided extra env appended last
+            {{- if .Values.extraEnv }}
+            {{- toYaml .Values.extraEnv | nindent 12 }}
+            {{- end }}
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{ toYaml . | nindent 8 }}

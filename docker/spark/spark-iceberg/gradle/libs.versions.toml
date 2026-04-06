@@ -1,0 +1,40 @@
+# Version catalog is a central place for you to declare and version dependencies
+# https://docs.gradle.org/current/userguide/platforms.html#sub:version-catalog
+# https://docs.gradle.org/current/userguide/platforms.html#sub::toml-dependencies-format
+
+[versions]
+kotlin = "2.2.21"
+kotlinxDatetime = "0.7.1"
+kotlinxSerializationJSON = "1.9.0"
+kotlinxCoroutines = "1.10.2"
+
+spark = "4.1.1"
+scalaBinary = "2.13"
+scalaFull = "2.13.18"
+iceberg = "1.10.1"
+hadoop = "3.4.2"
+
+[libraries]
+kotlinGradlePlugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
+kotlinxDatetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
+kotlinxSerialization = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJSON" }
+kotlinxCoroutines = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+
+scala-library = { module = "org.scala-lang:scala-library", version.ref = "scalaFull" }
+scala-reflect = { module = "org.scala-lang:scala-reflect", version.ref = "scalaFull" }
+scala-compiler = { module = "org.scala-lang:scala-compiler", version.ref = "scalaFull" }
+
+spark-sql = { module = "org.apache.spark:spark-sql_2.13", version.ref = "spark" }
+spark-core = { module = "org.apache.spark:spark-core_2.13", version.ref = "spark" }
+
+iceberg-spark-runtime = { module = "org.apache.iceberg:iceberg-spark-runtime-4.0_2.13", version.ref = "iceberg" }
+iceberg-core = { module = "org.apache.iceberg:iceberg-core", version.ref = "iceberg" }
+iceberg-aws-bundle = { module = "org.apache.iceberg:iceberg-aws-bundle", version.ref = "iceberg" }
+
+
+# Libraries can be bundled together for easier import
+[bundles]
+kotlinxEcosystem = ["kotlinxDatetime", "kotlinxSerialization", "kotlinxCoroutines"]
+
+[plugins]
+kotlinPluginSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

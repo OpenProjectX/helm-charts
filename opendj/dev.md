@@ -31,7 +31,7 @@ ldapsearch -H ldaps://ldap.openprojectx.org:1636 -x -D "cn=admin" -w REPLACE_IT 
 ldapsearch -H ldaps://ldap.openprojectx.org:1636 -x -D "cn=admin" -w REPLACE_IT \
   -s base -b "" namingContexts
   
-ldapsearch -H ldaps://ldap.openprojectx.org:1636 -x -D "cn=admin" -w REPLACE_IT \
+ldapsearch -H ldaps://ldap.openprojectx.org:1636 -x -D "cn=admin" -w $REPLACE_IT \
   -b "dc=openprojectx,dc=org" -s base "(objectClass=*)" dn
 
 
@@ -55,6 +55,10 @@ ldapsearch -x -H $LDAP_URI \
 #  1.3 Who am I binding as?
 ldapwhoami -x -H $LDAP_URI \
   -D "$ADMIN_DN" -w "$ADMIN_PW"  
+
+ldapwhoami -x -H $LDAP_URI \
+  -D "uid=alice,ou=people,dc=openprojectx,dc=org" \
+  -w $REPLACE_IT
   
 #2.1 List all users
 ldapsearch -x -H $LDAP_URI \
