@@ -1,7 +1,7 @@
 FROM postgres:14-bookworm
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends openjdk-17-jdk-headless \
+    apt-get install -y --no-install-recommends openjdk-17-jdk \
         bash \
         ca-certificates \
         curl \
