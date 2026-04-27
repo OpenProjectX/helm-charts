@@ -1,21 +1,6 @@
 FROM ubuntu:24.04
 
-ENV DEBIAN_FRONTEND=noninteractive \
-    KRB5_REALM=EXAMPLE.COM \
-    KRB5_DOMAIN=example.com \
-    KRB5_KDC_HOST=kerberos.example.com \
-    KRB5_ADMIN_SERVER=kerberos.example.com \
-    KRB5_KEYTAB_DIR=/shared/keytabs \
-    KRB5_EXPORT_CONFIG_DIR=/shared/config \
-    KRB5_CLIENT_PRINCIPALS= \
-    KRB5_SERVICE_PRINCIPALS= \
-    KRB5_ADMIN_PRINCIPAL=admin/admin \
-    KRB5_ADMIN_PASSWORD=admin \
-    KRB5_DEFAULT_PASSWORD=changeme \
-    KRB5_CLIENT_PASSWORD= \
-    KRB5_SERVICE_PASSWORD= \
-    KRB5_PASSWORD_MAP= \
-    KRB5_GENERATE_COMBINED_KEYTAB=true
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -26,6 +11,18 @@ RUN apt-get update \
         krb5-user \
         procps \
     && rm -rf /var/lib/apt/lists/*
+
+ENV KRB5_REALM=EXAMPLE.COM \
+    KRB5_DOMAIN=example.com \
+    KRB5_KDC_HOST=kerberos.example.com \
+    KRB5_ADMIN_SERVER=kerberos.example.com \
+    KRB5_KEYTAB_DIR=/shared/keytabs \
+    KRB5_EXPORT_CONFIG_DIR=/shared/config \
+    KRB5_CLIENT_PRINCIPALS= \
+    KRB5_SERVICE_PRINCIPALS= \
+    KRB5_ADMIN_PRINCIPAL=admin/admin \
+    KRB5_RESET_EXISTING_PASSWORDS=false \
+    KRB5_GENERATE_COMBINED_KEYTAB=true
 
 COPY krb5.conf.template /opt/kerberos/templates/krb5.conf.template
 COPY kdc.conf.template /opt/kerberos/templates/kdc.conf.template

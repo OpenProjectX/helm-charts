@@ -87,7 +87,7 @@ password_for() {
 
 principal_exists() {
   local principal="$1"
-  kadmin.local -q "getprinc $principal" >/dev/null 2>&1
+  kadmin.local -q "getprinc $principal" 2>/dev/null | grep -q "^Principal: $principal"
 }
 
 ensure_principal() {
@@ -96,6 +96,10 @@ ensure_principal() {
 
   if principal_exists "$principal"; then
     log "principal exists: $principal"
+    if [ "${KRB5_RESET_EXISTING_PASSWORDS,,}" = "true" ]; then
+      log "resetting password: $principal"
+      kadmin.local -q "cpw -pw $password $principal" >/dev/null
+    fi
   else
     log "creating principal: $principal"
     kadmin.local -q "addprinc -pw $password $principal" >/dev/null
@@ -156,6 +160,14 @@ initialize_database() {
 }
 
 main() {
+  KRB5_ADMIN_PASSWORD="${KRB5_ADMIN_PASSWORD:-admin}"
+  KRB5_DEFAULT_PASSWORD="${KRB5_DEFAULT_PASSWORD:-changeme}"
+  KRB5_CLIENT_PASSWORD="${KRB5_CLIENT_PASSWORD:-}"
+  KRB5_SERVICE_PASSWORD="${KRB5_SERVICE_PASSWORD:-}"
+  KRB5_PASSWORD_MAP="${KRB5_PASSWORD_MAP:-}"
+  KRB5_MASTER_PASSWORD="${KRB5_MASTER_PASSWORD:-$KRB5_ADMIN_PASSWORD}"
+  KRB5_RESET_EXISTING_PASSWORDS="${KRB5_RESET_EXISTING_PASSWORDS:-false}"
+
   require_env KRB5_REALM
   require_env KRB5_DOMAIN
   require_env KRB5_KDC_HOST
@@ -163,8 +175,6 @@ main() {
   require_env KRB5_ADMIN_PRINCIPAL
   require_env KRB5_ADMIN_PASSWORD
   require_env KRB5_DEFAULT_PASSWORD
-
-  KRB5_MASTER_PASSWORD="${KRB5_MASTER_PASSWORD:-$KRB5_ADMIN_PASSWORD}"
 
   mkdir -p "$KRB5_KEYTAB_DIR" "$KRB5_EXPORT_CONFIG_DIR" /var/log/kerberos
   rm -f "$KRB5_KEYTAB_DIR/all.keytab"

@@ -39,6 +39,7 @@ The included `docker-compose.yml` creates:
 | `KRB5_CLIENT_PRINCIPALS` | unset | Comma-separated users, for example `alice,bob,analytics@EXAMPLE.COM`. |
 | `KRB5_SERVICE_PRINCIPALS` | unset | Comma-separated service principals, for example `HTTP/web.example.com,hive/server.example.com`. |
 | `KRB5_PASSWORD_MAP` | unset | Newline-separated `principal=password` overrides. Keys may include or omit the realm. |
+| `KRB5_RESET_EXISTING_PASSWORDS` | `false` | When `true`, reset passwords for principals that already exist in the persisted KDC database. |
 | `KRB5_KEYTAB_DIR` | `/shared/keytabs` | Directory where generated keytabs are written. |
 | `KRB5_EXPORT_CONFIG_DIR` | `/shared/config` | Directory where rendered `krb5.conf` and `kdc.conf` are copied. |
 | `KRB5_GENERATE_COMBINED_KEYTAB` | `true` | Also write all generated principals to `all.keytab`. |
