@@ -1,0 +1,35 @@
+services:
+  kerberos:
+    build:
+      context: .
+    image: openprojectx/mit-kerberos:ubuntu-24.04
+    container_name: kerberos
+    hostname: kerberos.example.com
+    ports:
+      - "88:88/tcp"
+      - "88:88/udp"
+      - "749:749/tcp"
+    environment:
+      KRB5_REALM: EXAMPLE.COM
+      KRB5_DOMAIN: example.com
+      KRB5_KDC_HOST: kerberos.example.com
+      KRB5_ADMIN_SERVER: kerberos.example.com
+      KRB5_ADMIN_PRINCIPAL: admin/admin
+      KRB5_ADMIN_PASSWORD: admin-secret
+      KRB5_DEFAULT_PASSWORD: default-secret
+      KRB5_CLIENT_PRINCIPALS: alice,bob,analytics@EXAMPLE.COM
+      KRB5_SERVICE_PRINCIPALS: HTTP/web.example.com,hive/hive-server.example.com,spark/history.example.com
+      KRB5_PASSWORD_MAP: |
+        alice=alice-secret
+        bob=bob-secret
+        analytics@EXAMPLE.COM=analytics-secret
+        HTTP/web.example.com=http-secret
+        hive/hive-server.example.com=hive-secret
+        spark/history.example.com=spark-secret
+    volumes:
+      - kerberos-data:/var/lib/krb5kdc
+      - kerberos-shared:/shared
+
+volumes:
+  kerberos-data:
+  kerberos-shared:

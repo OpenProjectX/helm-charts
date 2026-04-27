@@ -1,0 +1,19 @@
+[libdefaults]
+    default_realm = ${KRB5_REALM}
+    dns_lookup_realm = false
+    dns_lookup_kdc = false
+    ticket_lifetime = 24h
+    renew_lifetime = 7d
+    forwardable = true
+    rdns = false
+    default_ccache_name = FILE:/tmp/krb5cc_%{uid}
+
+[realms]
+    ${KRB5_REALM} = {
+        kdc = ${KRB5_KDC_HOST}
+        admin_server = ${KRB5_ADMIN_SERVER}
+    }
+
+[domain_realm]
+    .${KRB5_DOMAIN} = ${KRB5_REALM}
+    ${KRB5_DOMAIN} = ${KRB5_REALM}
