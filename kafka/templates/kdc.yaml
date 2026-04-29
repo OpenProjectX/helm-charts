@@ -1,0 +1,111 @@
+{{- if and .Values.kerberos.enabled .Values.kerberos.kdc.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kafka.fullname" . }}-kdc
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kdc
+spec:
+  type: {{ .Values.kerberos.kdc.service.type }}
+  selector:
+    {{- include "kafka.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: kdc
+  ports:
+    - name: kerberos-tcp
+      port: {{ .Values.kerberos.kdc.service.tcpPort }}
+      targetPort: kerberos-tcp
+      protocol: TCP
+    - name: kerberos-udp
+      port: {{ .Values.kerberos.kdc.service.udpPort }}
+      targetPort: kerberos-udp
+      protocol: UDP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kafka.fullname" . }}-kdc
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kdc
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kafka.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: kdc
+  template:
+    metadata:
+      labels:
+        {{- include "kafka.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: kdc
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: kdc
+          image: "{{ .Values.kerberos.kdc.image.repository }}:{{ .Values.kerberos.kdc.image.tag }}"
+          imagePullPolicy: {{ .Values.kerberos.kdc.image.pullPolicy }}
+          ports:
+            - name: kerberos-tcp
+              containerPort: {{ .Values.kerberos.kdc.service.tcpPort }}
+              protocol: TCP
+            - name: kerberos-udp
+              containerPort: {{ .Values.kerberos.kdc.service.udpPort }}
+              protocol: UDP
+          env:
+            {{- $kdcService := printf "%s-kdc" (include "kafka.fullname" .) }}
+            {{- range $name, $value := .Values.kerberos.kdc.env }}
+            - name: {{ $name }}
+              value: {{ default $kdcService $value | quote }}
+            {{- end }}
+            - name: KERBY_EXTRA_SERVICE_PRINCIPALS
+              value: {{ include "kafka.kdcExtraServicePrincipals" . | quote }}
+            {{- with .Values.kerberos.kdc.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - test -f /var/lib/kerby/client/krb5.conf
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          volumeMounts:
+            - name: kerby-data
+              mountPath: /var/lib/kerby
+          {{- with .Values.kerberos.kdc.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: kerby-data
+          {{- if .Values.kerberos.kdc.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "kafka.fullname" . }}-kdc
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+---
+{{- if .Values.kerberos.kdc.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "kafka.fullname" . }}-kdc
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kdc
+spec:
+  accessModes:
+    {{- toYaml .Values.kerberos.kdc.persistence.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.kerberos.kdc.persistence.size }}
+  {{- with .Values.kerberos.kdc.persistence.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}

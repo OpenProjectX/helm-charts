@@ -1,0 +1,106 @@
+{{- if .Values.schemaRegistry.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kafka.fullname" . }}-schema-registry
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: schema-registry
+spec:
+  type: {{ .Values.schemaRegistry.service.type }}
+  selector:
+    {{- include "kafka.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: schema-registry
+  ports:
+    - name: http
+      port: {{ .Values.schemaRegistry.service.port }}
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kafka.fullname" . }}-schema-registry
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: schema-registry
+spec:
+  replicas: {{ .Values.schemaRegistry.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "kafka.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: schema-registry
+  template:
+    metadata:
+      labels:
+        {{- include "kafka.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: schema-registry
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: schema-registry
+          image: "{{ .Values.schemaRegistry.image.repository }}:{{ .Values.schemaRegistry.image.tag }}"
+          imagePullPolicy: {{ .Values.schemaRegistry.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.schemaRegistry.service.port }}
+              protocol: TCP
+          env:
+            - name: SCHEMA_REGISTRY_HOST_NAME
+              value: {{ .Values.schemaRegistry.hostName | quote }}
+            - name: SCHEMA_REGISTRY_LISTENERS
+              value: "http://0.0.0.0:{{ .Values.schemaRegistry.service.port }}"
+            - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
+              value: {{ default (include "kafka.bootstrapServersWithProtocol" .) .Values.schemaRegistry.bootstrapServers | quote }}
+            {{- if and .Values.kerberos.enabled .Values.schemaRegistry.kerberos.enabled }}
+            - name: SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL
+              value: SASL_PLAINTEXT
+            - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM
+              value: GSSAPI
+            - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_KERBEROS_SERVICE_NAME
+              value: {{ .Values.kafka.saslKerberosServiceName | quote }}
+            - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG
+              value: {{ printf "com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"%s\" principal=\"%s\";" .Values.schemaRegistry.kerberos.keytab .Values.schemaRegistry.kerberos.principal | quote }}
+            - name: KAFKA_OPTS
+              value: "-Djava.security.krb5.conf={{ .Values.kerberos.krb5ConfigPath }}"
+            - name: KRB5_CONFIG
+              value: {{ .Values.kerberos.krb5ConfigPath | quote }}
+            - name: SCHEMA_REGISTRY_OPTS
+              value: "-Djava.security.krb5.conf={{ .Values.kerberos.krb5ConfigPath }}"
+            {{- end }}
+            {{- range $name, $value := .Values.schemaRegistry.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- with .Values.schemaRegistry.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            {{- if .Values.kerberos.enabled }}
+            - name: kerberos
+              mountPath: {{ .Values.kerberos.mountPath }}
+              readOnly: true
+            {{- end }}
+          {{- with .Values.schemaRegistry.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        {{- if .Values.kerberos.enabled }}
+        - name: kerberos
+          {{- if and .Values.kerberos.kdc.enabled (not .Values.kerberos.existingSecret) }}
+          persistentVolumeClaim:
+            claimName: {{ include "kafka.fullname" . }}-kdc
+          {{- else }}
+          secret:
+            secretName: {{ include "kafka.kerberosSecretName" . }}
+            {{- with .Values.kerberos.existingSecretItems }}
+            items:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+{{- end }}

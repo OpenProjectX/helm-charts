@@ -1,0 +1,81 @@
+{{- if .Values.topicInit.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kafka.fullname" . }}-topic-init
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: topic-init
+data:
+  client.properties: |
+    {{- .Values.topicInit.commandConfig | nindent 4 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "kafka.fullname" . }}-topic-init
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: topic-init
+spec:
+  backoffLimit: {{ .Values.topicInit.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "kafka.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: topic-init
+    spec:
+      restartPolicy: {{ .Values.topicInit.restartPolicy }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: topic-init
+          image: "{{ .Values.topicInit.image.repository }}:{{ .Values.topicInit.image.tag }}"
+          imagePullPolicy: {{ .Values.topicInit.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              export KAFKA_OPTS="-Djava.security.krb5.conf={{ .Values.kerberos.krb5ConfigPath }} ${KAFKA_OPTS:-}"
+              for i in $(seq 1 {{ int .Values.topicInit.waitAttempts }}); do
+                /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.bootstrapServers" . }} --command-config /etc/kafka/client.properties --list >/dev/null && break
+                sleep {{ int .Values.topicInit.waitSeconds }}
+              done
+              {{- range .Values.topicInit.topics }}
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.bootstrapServers" $ }} --command-config /etc/kafka/client.properties --create --topic {{ .name | quote }} --partitions {{ .partitions }} --replication-factor {{ .replicationFactor }} --if-not-exists
+              {{- end }}
+          volumeMounts:
+            - name: topic-init-config
+              mountPath: /etc/kafka/client.properties
+              subPath: client.properties
+              readOnly: true
+            {{- if .Values.kerberos.enabled }}
+            - name: kerberos
+              mountPath: {{ .Values.kerberos.mountPath }}
+              readOnly: true
+            {{- end }}
+          {{- with .Values.topicInit.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: topic-init-config
+          configMap:
+            name: {{ include "kafka.fullname" . }}-topic-init
+        {{- if .Values.kerberos.enabled }}
+        - name: kerberos
+          {{- if and .Values.kerberos.kdc.enabled (not .Values.kerberos.existingSecret) }}
+          persistentVolumeClaim:
+            claimName: {{ include "kafka.fullname" . }}-kdc
+          {{- else }}
+          secret:
+            secretName: {{ include "kafka.kerberosSecretName" . }}
+            {{- with .Values.kerberos.existingSecretItems }}
+            items:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+{{- end }}

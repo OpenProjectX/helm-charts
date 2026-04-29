@@ -1,0 +1,218 @@
+{{- if .Values.istio.enabled }}
+{{- $namespace := default .Release.Namespace .Values.istio.namespace }}
+{{- $fullname := include "kafka.fullname" . }}
+{{- $labels := include "kafka.labels" . }}
+{{- $parentRefs := .Values.istio.parentRefs }}
+{{- range $name, $route := .Values.istio.httpRoutes }}
+{{- if $route.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ default (printf "%s-%s" $fullname (kebabcase $name)) $route.nameOverride }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- $labels | nindent 4 }}
+    app.kubernetes.io/component: {{ kebabcase $name }}
+    {{- with $.Values.istio.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $.Values.istio.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml $parentRefs | nindent 4 }}
+  {{- with $route.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ default "/" $route.pathPrefix | quote }}
+      {{- with $route.filters }}
+      filters:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      backendRefs:
+        - name: {{ default (printf "%s-%s" $fullname (kebabcase $name | replace "kafbat-ui" "ui")) $route.serviceName }}
+          port: {{ $route.port }}
+    {{- with $route.additionalRules }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- with .Values.istio.tcpRoutes.kafka }}
+{{- if .enabled }}
+---
+apiVersion: {{ .apiVersion }}
+kind: TCPRoute
+metadata:
+  name: {{ default (printf "%s-kafka" $fullname) .nameOverride }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- $labels | nindent 4 }}
+    app.kubernetes.io/component: kafka
+    {{- with $.Values.istio.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $.Values.istio.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml $parentRefs | nindent 4 }}
+  rules:
+    {{- range .rules }}
+    - {{- if .matches }}
+      matches:
+        {{- toYaml .matches | nindent 8 }}
+      {{- end }}
+      backendRefs:
+        {{- range .backendRefs }}
+        - name: {{ default (include "kafka.serviceName" $) .name }}
+          port: {{ default $.Values.kafka.ports.client.servicePort .port }}
+          {{- with .weight }}
+          weight: {{ . }}
+          {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.istio.destinationRules.enabled }}
+{{- range .Values.istio.destinationRules.rules }}
+---
+apiVersion: {{ default $.Values.istio.destinationRules.apiVersion .apiVersion }}
+kind: DestinationRule
+metadata:
+  name: {{ .name }}
+  namespace: {{ default $namespace .namespace }}
+  labels:
+    {{- $labels | nindent 4 }}
+    {{- with $.Values.istio.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $.Values.istio.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  host: {{ .host | quote }}
+  {{- with .trafficPolicy }}
+  trafficPolicy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .subsets }}
+  subsets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .exportTo }}
+  exportTo:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.istio.virtualServices.enabled }}
+{{- range .Values.istio.virtualServices.services }}
+---
+apiVersion: {{ default $.Values.istio.virtualServices.apiVersion .apiVersion }}
+kind: VirtualService
+metadata:
+  name: {{ .name }}
+  namespace: {{ default $namespace .namespace }}
+  labels:
+    {{- $labels | nindent 4 }}
+    {{- with $.Values.istio.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $.Values.istio.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .hosts }}
+  hosts:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .gateways }}
+  gateways:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .http }}
+  http:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .tcp }}
+  tcp:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.istio.peerAuthentication.enabled }}
+---
+apiVersion: {{ .Values.istio.peerAuthentication.apiVersion }}
+kind: PeerAuthentication
+metadata:
+  name: {{ default (printf "%s-peer-authentication" $fullname) .Values.istio.peerAuthentication.nameOverride }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- $labels | nindent 4 }}
+    {{- with .Values.istio.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.istio.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.istio.peerAuthentication.selector }}
+  selector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  mtls:
+    {{- toYaml .Values.istio.peerAuthentication.mtls | nindent 4 }}
+  {{- with .Values.istio.peerAuthentication.portLevelMtls }}
+  portLevelMtls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- if .Values.istio.authorizationPolicies.enabled }}
+{{- range .Values.istio.authorizationPolicies.policies }}
+---
+apiVersion: {{ default $.Values.istio.authorizationPolicies.apiVersion .apiVersion }}
+kind: AuthorizationPolicy
+metadata:
+  name: {{ .name }}
+  namespace: {{ default $namespace .namespace }}
+  labels:
+    {{- $labels | nindent 4 }}
+    {{- with $.Values.istio.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $.Values.istio.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .selector }}
+  selector:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .action }}
+  action: {{ . }}
+  {{- end }}
+  {{- with .rules }}
+  rules:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

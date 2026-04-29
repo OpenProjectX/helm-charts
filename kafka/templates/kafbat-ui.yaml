@@ -1,0 +1,111 @@
+{{- if .Values.kafbatUi.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kafka.fullname" . }}-ui
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  type: {{ .Values.kafbatUi.service.type }}
+  selector:
+    {{- include "kafka.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+  ports:
+    - name: http
+      port: {{ .Values.kafbatUi.service.port }}
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kafka.fullname" . }}-ui
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  replicas: {{ .Values.kafbatUi.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "kafka.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ui
+  template:
+    metadata:
+      labels:
+        {{- include "kafka.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ui
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: kafbat-ui
+          image: "{{ .Values.kafbatUi.image.repository }}:{{ .Values.kafbatUi.image.tag }}"
+          imagePullPolicy: {{ .Values.kafbatUi.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: JAVA_OPTS
+              value: "-Djava.security.krb5.conf={{ .Values.kerberos.krb5ConfigPath }}"
+            - name: DYNAMIC_CONFIG_ENABLED
+              value: {{ .Values.kafbatUi.dynamicConfigEnabled | quote }}
+            {{- range $i, $cluster := .Values.kafbatUi.clusters }}
+            - name: KAFKA_CLUSTERS_{{ $i }}_NAME
+              value: {{ $cluster.name | quote }}
+            - name: KAFKA_CLUSTERS_{{ $i }}_BOOTSTRAPSERVERS
+              value: {{ default (include "kafka.bootstrapServers" $) $cluster.bootstrapServers | quote }}
+            {{- if $cluster.schemaRegistry }}
+            - name: KAFKA_CLUSTERS_{{ $i }}_SCHEMAREGISTRY
+              value: {{ $cluster.schemaRegistry | quote }}
+            {{- else if $.Values.schemaRegistry.enabled }}
+            - name: KAFKA_CLUSTERS_{{ $i }}_SCHEMAREGISTRY
+              value: {{ printf "http://%s-schema-registry:%v" (include "kafka.fullname" $) $.Values.schemaRegistry.service.port | quote }}
+            {{- end }}
+            {{- if and $.Values.kerberos.enabled $.Values.kafbatUi.kerberos.enabled }}
+            - name: KAFKA_CLUSTERS_{{ $i }}_PROPERTIES_SECURITY_PROTOCOL
+              value: SASL_PLAINTEXT
+            - name: KAFKA_CLUSTERS_{{ $i }}_PROPERTIES_SASL_MECHANISM
+              value: GSSAPI
+            - name: KAFKA_CLUSTERS_{{ $i }}_PROPERTIES_SASL_KERBEROS_SERVICE_NAME
+              value: {{ $.Values.kafka.saslKerberosServiceName | quote }}
+            - name: KAFKA_CLUSTERS_{{ $i }}_PROPERTIES_SASL_JAAS_CONFIG
+              value: {{ printf "com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"%s\" principal=\"%s\";" $.Values.kafbatUi.kerberos.keytab $.Values.kafbatUi.kerberos.principal | quote }}
+            {{- end }}
+            {{- end }}
+            {{- range $name, $value := .Values.kafbatUi.env }}
+            - name: {{ $name }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- with .Values.kafbatUi.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            {{- if .Values.kerberos.enabled }}
+            - name: kerberos
+              mountPath: {{ .Values.kerberos.mountPath }}
+              readOnly: true
+            {{- end }}
+          {{- with .Values.kafbatUi.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        {{- if .Values.kerberos.enabled }}
+        - name: kerberos
+          {{- if and .Values.kerberos.kdc.enabled (not .Values.kerberos.existingSecret) }}
+          persistentVolumeClaim:
+            claimName: {{ include "kafka.fullname" . }}-kdc
+          {{- else }}
+          secret:
+            secretName: {{ include "kafka.kerberosSecretName" . }}
+            {{- with .Values.kerberos.existingSecretItems }}
+            items:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+{{- end }}

@@ -1,0 +1,309 @@
+nameOverride: ""
+fullnameOverride: ""
+namespaceOverride: ""
+clusterDomain: cluster.local
+
+imagePullSecrets: []
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+kerberos:
+  enabled: true
+  existingSecret: ""
+  existingSecretItems: []
+  mountPath: /kerby
+  realm: EXAMPLE.COM
+  krb5ConfigPath: /kerby/client/krb5.conf
+  keytabsDir: /var/lib/kerby/keytabs
+  generateKafkaPrincipals: true
+  extraServicePrincipals:
+    - principal: kafbat-ui/kafbat-ui.example.com@EXAMPLE.COM
+      keytab: /var/lib/kerby/keytabs/kafbat-ui.keytab
+    - principal: mm2/mm2.example.com@EXAMPLE.COM
+      keytab: /var/lib/kerby/keytabs/mm2.keytab
+    - principal: schema-registry/schema-registry.example.com@EXAMPLE.COM
+      keytab: /var/lib/kerby/keytabs/schema-registry.keytab
+  kdc:
+    enabled: true
+    image:
+      repository: ghcr.io/openprojectx/directory-kerby/kerby-kdc
+      tag: latest
+      pullPolicy: IfNotPresent
+    service:
+      type: ClusterIP
+      tcpPort: 88
+      udpPort: 88
+    persistence:
+      enabled: true
+      size: 1Gi
+      storageClassName: ""
+      accessModes: ["ReadWriteOnce"]
+    env:
+      KERBY_REALM: EXAMPLE.COM
+      KERBY_KDC_HOST: ""
+      KERBY_KDC_BIND_HOST: 0.0.0.0
+      KERBY_KDC_TCP_PORT: "88"
+      KERBY_KDC_UDP_PORT: "88"
+      KERBY_CLIENT_KDC_HOST: ""
+      KERBY_CLIENT_KDC_PORT: "88"
+      KERBY_CLIENT_DOMAIN: example.com
+      KERBY_PREAUTH_REQUIRED: "false"
+      KERBY_PA_ENC_TIMESTAMP_REQUIRED: "false"
+      KERBY_CLIENT_PRINCIPAL: app_user@EXAMPLE.COM
+      KERBY_CLIENT_PASSWORD: app-user-secret
+      KERBY_SERVICE_PRINCIPAL: HTTP/api.example.com@EXAMPLE.COM
+      KERBY_SERVICE_KEYTAB: /var/lib/kerby/keytabs/http-api.keytab
+    extraEnv: []
+    resources: {}
+
+kafka:
+  replicaCount: 2
+  image:
+    repository: apache/kafka
+    tag: 3.9.0
+    pullPolicy: IfNotPresent
+  clusterId: MkU3OEVBNTcwNTJENDM2Qk
+  processRoles: broker,controller
+  logDirs: /var/lib/kafka/data
+  brokerIdOffset: 1
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  securityContext:
+    fsGroup: 1000
+  containerSecurityContext: {}
+  service:
+    nameOverride: ""
+    type: ClusterIP
+    annotations: {}
+  headlessService:
+    nameOverride: ""
+    annotations: {}
+  ports:
+    client:
+      name: sasl-plaintext
+      containerPort: 9092
+      servicePort: 9092
+      protocol: TCP
+    controller:
+      name: controller
+      containerPort: 29093
+      servicePort: 29093
+      protocol: TCP
+    jmx:
+      name: jmx
+      containerPort: 9997
+      servicePort: 9997
+      protocol: TCP
+  listenerSecurityProtocolMap: CONTROLLER:PLAINTEXT,SASL_PLAINTEXT:SASL_PLAINTEXT
+  interBrokerListenerName: SASL_PLAINTEXT
+  saslEnabledMechanisms: GSSAPI
+  saslMechanismInterBrokerProtocol: GSSAPI
+  saslKerberosServiceName: kafka
+  kerberos:
+    enabled: true
+    keytabPattern: /kerby/keytabs/kafka-%d.keytab
+    principalPattern: kafka/%s@EXAMPLE.COM
+    jaasPath: /tmp/kafka_server_jaas.conf
+  superUsers:
+    - User:kafbat-ui/kafbat-ui.example.com@EXAMPLE.COM
+    - User:mm2/mm2.example.com@EXAMPLE.COM
+    - User:schema-registry/schema-registry.example.com@EXAMPLE.COM
+  config:
+    KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+    KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+    KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+    KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+  env: []
+  extraEnvFrom: []
+  resources: {}
+  persistence:
+    enabled: true
+    mountPath: /var/lib/kafka
+    size: 20Gi
+    storageClassName: ""
+    accessModes: ["ReadWriteOnce"]
+  extraVolumes: []
+  extraVolumeMounts: []
+
+schemaRegistry:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: confluentinc/cp-schema-registry
+    tag: 7.8.0
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8085
+  hostName: schema-registry.example.com
+  bootstrapServers: ""
+  kerberos:
+    enabled: true
+    keytab: /kerby/keytabs/schema-registry.keytab
+    principal: schema-registry/schema-registry.example.com@EXAMPLE.COM
+  env: {}
+  extraEnv: []
+  resources: {}
+
+kafbatUi:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/openprojectx/kafka-ui
+    tag: 0.0.1-SNAPSHOT
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+  dynamicConfigEnabled: "false"
+  clusters:
+    - name: kerberos-local
+      bootstrapServers: ""
+      schemaRegistry: ""
+  kerberos:
+    enabled: true
+    keytab: /kerby/keytabs/kafbat-ui.keytab
+    principal: kafbat-ui/kafbat-ui.example.com@EXAMPLE.COM
+  env: {}
+  extraEnv: []
+  resources: {}
+
+topicInit:
+  enabled: true
+  image:
+    repository: apache/kafka
+    tag: 3.9.0
+    pullPolicy: IfNotPresent
+  backoffLimit: 6
+  restartPolicy: OnFailure
+  waitAttempts: 60
+  waitSeconds: 2
+  topics:
+    - name: kerberos.messages
+      partitions: 1
+      replicationFactor: 1
+    - name: primary.orders
+      partitions: 2
+      replicationFactor: 1
+    - name: primary.payments
+      partitions: 2
+      replicationFactor: 1
+    - name: primary.audit
+      partitions: 1
+      replicationFactor: 1
+  commandConfig: |
+    security.protocol=SASL_PLAINTEXT
+    sasl.mechanism=GSSAPI
+    sasl.kerberos.service.name=kafka
+    sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab="/kerby/keytabs/kafbat-ui.keytab" principal="kafbat-ui/kafbat-ui.example.com@EXAMPLE.COM";
+  resources: {}
+
+mirrorMaker:
+  enabled: false
+  image:
+    repository: apache/kafka
+    tag: 3.9.0
+    pullPolicy: IfNotPresent
+  properties: |
+    clusters = primary, standby
+    primary.bootstrap.servers = broker1.example.com:9092
+    standby.bootstrap.servers = broker2.example.com:9093
+    primary->standby.enabled = true
+    primary->standby.topics = .*
+    replication.factor = 1
+    checkpoints.topic.replication.factor = 1
+    heartbeats.topic.replication.factor = 1
+    offset-syncs.topic.replication.factor = 1
+  resources: {}
+
+istio:
+  enabled: true
+  namespace: ""
+  labels: {}
+  annotations: {}
+  parentRefs:
+    - name: k8s-infra-gateway
+      namespace: istio-ingress
+
+  httpRoutes:
+    ui:
+      enabled: true
+      nameOverride: ""
+      hostnames: []
+      pathPrefix: /
+      serviceName: ""
+      port: 8080
+      filters: []
+      additionalRules: []
+    schemaRegistry:
+      enabled: true
+      nameOverride: ""
+      hostnames: []
+      pathPrefix: /
+      serviceName: ""
+      port: 8085
+      filters: []
+      additionalRules: []
+
+  tcpRoutes:
+    kafka:
+      enabled: true
+      apiVersion: gateway.networking.k8s.io/v1alpha2
+      nameOverride: ""
+      rules:
+        - backendRefs:
+            - name: ""
+              port: 9092
+
+  virtualServices:
+    enabled: false
+    apiVersion: networking.istio.io/v1
+    services: []
+    # - name: kafka-tcp
+    #   hosts: ["kafka.example.com"]
+    #   gateways: ["istio-ingress/k8s-infra-gateway"]
+    #   tcp:
+    #     - match:
+    #         - port: 9092
+    #       route:
+    #         - destination:
+    #             host: kafka-kafka.kafka.svc.cluster.local
+    #             port:
+    #               number: 9092
+
+  destinationRules:
+    enabled: false
+    apiVersion: networking.istio.io/v1
+    rules: []
+    # - name: kafka-ui
+    #   host: kafka-kafka-ui.kafka.svc.cluster.local
+    #   trafficPolicy:
+    #     tls:
+    #       mode: DISABLE
+
+  peerAuthentication:
+    enabled: false
+    apiVersion: security.istio.io/v1
+    nameOverride: ""
+    mtls:
+      mode: PERMISSIVE
+    portLevelMtls: {}
+    selector: {}
+
+  authorizationPolicies:
+    enabled: false
+    apiVersion: security.istio.io/v1
+    policies: []
+    # - name: kafka-ui-allow
+    #   selector:
+    #     matchLabels:
+    #       app.kubernetes.io/component: ui
+    #   action: ALLOW
+    #   rules:
+    #     - from:
+    #         - source:
+    #             namespaces: ["istio-ingress"]

@@ -1,0 +1,78 @@
+{{- if .Values.mirrorMaker.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kafka.fullname" . }}-mirror-maker
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mirror-maker
+data:
+  mm2.properties: |
+    {{- .Values.mirrorMaker.properties | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kafka.fullname" . }}-mirror-maker
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mirror-maker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "kafka.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mirror-maker
+  template:
+    metadata:
+      labels:
+        {{- include "kafka.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mirror-maker
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: mirror-maker
+          image: "{{ .Values.mirrorMaker.image.repository }}:{{ .Values.mirrorMaker.image.tag }}"
+          imagePullPolicy: {{ .Values.mirrorMaker.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              export KAFKA_OPTS="-Djava.security.krb5.conf={{ .Values.kerberos.krb5ConfigPath }} ${KAFKA_OPTS:-}"
+              exec /opt/kafka/bin/connect-mirror-maker.sh /etc/kafka/mm2.properties
+          volumeMounts:
+            - name: mirror-maker-config
+              mountPath: /etc/kafka/mm2.properties
+              subPath: mm2.properties
+              readOnly: true
+            {{- if .Values.kerberos.enabled }}
+            - name: kerberos
+              mountPath: {{ .Values.kerberos.mountPath }}
+              readOnly: true
+            {{- end }}
+          {{- with .Values.mirrorMaker.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: mirror-maker-config
+          configMap:
+            name: {{ include "kafka.fullname" . }}-mirror-maker
+        {{- if .Values.kerberos.enabled }}
+        - name: kerberos
+          {{- if and .Values.kerberos.kdc.enabled (not .Values.kerberos.existingSecret) }}
+          persistentVolumeClaim:
+            claimName: {{ include "kafka.fullname" . }}-kdc
+          {{- else }}
+          secret:
+            secretName: {{ include "kafka.kerberosSecretName" . }}
+            {{- with .Values.kerberos.existingSecretItems }}
+            items:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+{{- end }}

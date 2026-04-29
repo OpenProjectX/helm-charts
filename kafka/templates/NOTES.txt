@@ -1,0 +1,13 @@
+Kafka has been installed as {{ include "kafka.fullname" . }}.
+
+Bootstrap service:
+  {{ include "kafka.serviceName" . }}:{{ .Values.kafka.ports.client.servicePort }}
+
+Broker DNS names:
+{{- $fullname := include "kafka.fullname" . }}
+{{- $headless := include "kafka.headlessServiceName" . }}
+{{- $namespace := include "kafka.namespace" . }}
+{{- $domain := include "kafka.clusterDomain" . }}
+{{- range $i := until (int .Values.kafka.replicaCount) }}
+  {{ $fullname }}-{{ $i }}.{{ $headless }}.{{ $namespace }}.svc.{{ $domain }}:{{ $.Values.kafka.ports.client.servicePort }}
+{{- end }}

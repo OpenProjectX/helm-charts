@@ -1,0 +1,221 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kafka.headlessServiceName" . }}
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+  {{- with .Values.kafka.headlessService.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "kafka.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+  ports:
+    - name: {{ .Values.kafka.ports.client.name }}
+      port: {{ .Values.kafka.ports.client.servicePort }}
+      targetPort: {{ .Values.kafka.ports.client.name }}
+      protocol: {{ .Values.kafka.ports.client.protocol }}
+    - name: {{ .Values.kafka.ports.controller.name }}
+      port: {{ .Values.kafka.ports.controller.servicePort }}
+      targetPort: {{ .Values.kafka.ports.controller.name }}
+      protocol: {{ .Values.kafka.ports.controller.protocol }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "kafka.serviceName" . }}
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+  {{- with .Values.kafka.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.kafka.service.type }}
+  selector:
+    {{- include "kafka.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+  ports:
+    - name: {{ .Values.kafka.ports.client.name }}
+      port: {{ .Values.kafka.ports.client.servicePort }}
+      targetPort: {{ .Values.kafka.ports.client.name }}
+      protocol: {{ .Values.kafka.ports.client.protocol }}
+    - name: {{ .Values.kafka.ports.jmx.name }}
+      port: {{ .Values.kafka.ports.jmx.servicePort }}
+      targetPort: {{ .Values.kafka.ports.jmx.name }}
+      protocol: {{ .Values.kafka.ports.jmx.protocol }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "kafka.fullname" . }}
+  labels:
+    {{- include "kafka.labels" . | nindent 4 }}
+    app.kubernetes.io/component: broker
+spec:
+  serviceName: {{ include "kafka.headlessServiceName" . }}
+  replicas: {{ .Values.kafka.replicaCount }}
+  podManagementPolicy: {{ .Values.kafka.podManagementPolicy }}
+  updateStrategy:
+    {{- toYaml .Values.kafka.updateStrategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "kafka.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: broker
+  template:
+    metadata:
+      labels:
+        {{- include "kafka.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: broker
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.kafka.securityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: kafka
+          image: "{{ .Values.kafka.image.repository }}:{{ .Values.kafka.image.tag }}"
+          imagePullPolicy: {{ .Values.kafka.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              ORDINAL="${HOSTNAME##*-}"
+              NODE_ID=$((ORDINAL + {{ int .Values.kafka.brokerIdOffset }}))
+              POD_FQDN="${HOSTNAME}.{{ include "kafka.headlessServiceName" . }}.{{ include "kafka.namespace" . }}.svc.{{ include "kafka.clusterDomain" . }}"
+              export KAFKA_NODE_ID="${NODE_ID}"
+              export KAFKA_BROKER_ID="${NODE_ID}"
+              export KAFKA_PROCESS_ROLES="{{ .Values.kafka.processRoles }}"
+              export KAFKA_CONTROLLER_QUORUM_VOTERS="{{ include "kafka.controllerQuorum" . }}"
+              export KAFKA_CONTROLLER_LISTENER_NAMES="CONTROLLER"
+              export KAFKA_LISTENER_SECURITY_PROTOCOL_MAP="{{ .Values.kafka.listenerSecurityProtocolMap }}"
+              export KAFKA_LISTENERS="SASL_PLAINTEXT://0.0.0.0:{{ .Values.kafka.ports.client.containerPort }},CONTROLLER://${POD_FQDN}:{{ .Values.kafka.ports.controller.containerPort }}"
+              export KAFKA_ADVERTISED_LISTENERS="SASL_PLAINTEXT://${POD_FQDN}:{{ .Values.kafka.ports.client.containerPort }}"
+              export KAFKA_INTER_BROKER_LISTENER_NAME="{{ .Values.kafka.interBrokerListenerName }}"
+              export KAFKA_SASL_ENABLED_MECHANISMS="{{ .Values.kafka.saslEnabledMechanisms }}"
+              export KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL="{{ .Values.kafka.saslMechanismInterBrokerProtocol }}"
+              export KAFKA_SASL_KERBEROS_SERVICE_NAME="{{ .Values.kafka.saslKerberosServiceName }}"
+              export KAFKA_LOG_DIRS="{{ .Values.kafka.logDirs }}"
+              export KAFKA_JMX_PORT="{{ .Values.kafka.ports.jmx.containerPort }}"
+              export KAFKA_JMX_HOSTNAME="${POD_FQDN}"
+              export CLUSTER_ID="{{ .Values.kafka.clusterId }}"
+              {{- range $name, $value := .Values.kafka.config }}
+              export {{ $name }}={{ $value | quote }}
+              {{- end }}
+              {{- if and .Values.kerberos.enabled .Values.kafka.kerberos.enabled }}
+              KAFKA_KEYTAB="$(printf "{{ .Values.kafka.kerberos.keytabPattern }}" "${ORDINAL}")"
+              KAFKA_PRINCIPAL="$(printf "{{ .Values.kafka.kerberos.principalPattern }}" "${POD_FQDN}")"
+              cat > {{ .Values.kafka.kerberos.jaasPath }} <<EOF
+              KafkaServer {
+                com.sun.security.auth.module.Krb5LoginModule required
+                useKeyTab=true
+                storeKey=true
+                keyTab="${KAFKA_KEYTAB}"
+                principal="${KAFKA_PRINCIPAL}";
+              };
+              EOF
+              export KAFKA_OPTS="-Djava.security.krb5.conf={{ .Values.kerberos.krb5ConfigPath }} -Djava.security.auth.login.config={{ .Values.kafka.kerberos.jaasPath }} ${KAFKA_OPTS:-}"
+              {{- end }}
+              exec /etc/kafka/docker/run
+          ports:
+            - name: {{ .Values.kafka.ports.client.name }}
+              containerPort: {{ .Values.kafka.ports.client.containerPort }}
+              protocol: {{ .Values.kafka.ports.client.protocol }}
+            - name: {{ .Values.kafka.ports.controller.name }}
+              containerPort: {{ .Values.kafka.ports.controller.containerPort }}
+              protocol: {{ .Values.kafka.ports.controller.protocol }}
+            - name: {{ .Values.kafka.ports.jmx.name }}
+              containerPort: {{ .Values.kafka.ports.jmx.containerPort }}
+              protocol: {{ .Values.kafka.ports.jmx.protocol }}
+          env:
+            - name: KAFKA_SUPER_USERS
+              value: {{ join ";" .Values.kafka.superUsers | quote }}
+            {{- with .Values.kafka.env }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.kafka.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- if .Values.kafka.persistence.enabled }}
+            - name: data
+              mountPath: {{ .Values.kafka.persistence.mountPath }}
+            {{- end }}
+            {{- if .Values.kerberos.enabled }}
+            - name: kerberos
+              mountPath: {{ .Values.kerberos.mountPath }}
+              readOnly: true
+            {{- end }}
+            {{- with .Values.kafka.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.kafka.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.kafka.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        {{- if .Values.kerberos.enabled }}
+        - name: kerberos
+          {{- if and .Values.kerberos.kdc.enabled (not .Values.kerberos.existingSecret) }}
+          persistentVolumeClaim:
+            claimName: {{ include "kafka.fullname" . }}-kdc
+          {{- else }}
+          secret:
+            secretName: {{ include "kafka.kerberosSecretName" . }}
+            {{- with .Values.kerberos.existingSecretItems }}
+            items:
+              {{- toYaml . | nindent 14 }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
+        {{- with .Values.kafka.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+  {{- if .Values.kafka.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.kafka.persistence.accessModes | nindent 10 }}
+        resources:
+          requests:
+            storage: {{ .Values.kafka.persistence.size }}
+        {{- with .Values.kafka.persistence.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+  {{- end }}
