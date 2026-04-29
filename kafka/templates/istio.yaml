@@ -3,6 +3,7 @@
 {{- $fullname := include "kafka.fullname" . }}
 {{- $labels := include "kafka.labels" . }}
 {{- $parentRefs := .Values.istio.parentRefs }}
+{{- if .Values.istio.gatewayApi.enabled }}
 {{- range $name, $route := .Values.istio.httpRoutes }}
 {{- if $route.enabled }}
 ---
@@ -83,6 +84,8 @@ spec:
     {{- end }}
 {{- end }}
 {{- end }}
+{{- end }}
+{{- if .Values.istio.native.enabled }}
 {{- if .Values.istio.destinationRules.enabled }}
 {{- range .Values.istio.destinationRules.rules }}
 ---
@@ -212,7 +215,8 @@ spec:
   {{- with .rules }}
   rules:
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

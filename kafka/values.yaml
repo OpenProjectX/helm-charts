@@ -225,6 +225,10 @@ istio:
   namespace: ""
   labels: {}
   annotations: {}
+  gatewayApi:
+    enabled: true
+  native:
+    enabled: true
   parentRefs:
     - name: k8s-infra-gateway
       namespace: istio-ingress
@@ -251,7 +255,7 @@ istio:
 
   tcpRoutes:
     kafka:
-      enabled: true
+      enabled: false
       apiVersion: gateway.networking.k8s.io/v1alpha2
       nameOverride: ""
       rules:
@@ -260,7 +264,7 @@ istio:
               port: 9092
 
   virtualServices:
-    enabled: false
+    enabled: true
     apiVersion: networking.istio.io/v1
     services: []
     # - name: kafka-tcp
