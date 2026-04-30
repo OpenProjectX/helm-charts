@@ -133,11 +133,13 @@ kafka:
   extraEnvFrom: []
   resources: {}
   persistence:
+    # When enabled, each broker gets a PVC. When disabled, brokers use emptyDir.
     enabled: true
     mountPath: /var/lib/kafka
     size: 20Gi
     storageClassName: ""
     accessModes: ["ReadWriteOnce"]
+    emptyDir: {}
   extraVolumes: []
   extraVolumeMounts: []
 

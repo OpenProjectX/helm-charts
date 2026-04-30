@@ -197,10 +197,8 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           volumeMounts:
-            {{- if (default $root.Values.kafka.persistence.enabled (dig "persistence" "enabled" nil $cluster)) }}
             - name: data
               mountPath: {{ default $root.Values.kafka.persistence.mountPath (dig "persistence" "mountPath" nil $cluster) }}
-            {{- end }}
             {{- if $root.Values.kerberos.enabled }}
             - name: kerberos
               mountPath: {{ $root.Values.kerberos.mountPath }}
@@ -230,6 +228,11 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes:
+        {{- if not (default $root.Values.kafka.persistence.enabled (dig "persistence" "enabled" nil $cluster)) }}
+        - name: data
+          emptyDir:
+            {{- toYaml (default $root.Values.kafka.persistence.emptyDir (dig "persistence" "emptyDir" nil $cluster)) | nindent 12 }}
+        {{- end }}
         {{- if $root.Values.kerberos.enabled }}
         - name: kerberos
           {{- if and $root.Values.kerberos.kdc.enabled (not $root.Values.kerberos.existingSecret) }}

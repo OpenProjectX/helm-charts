@@ -31,6 +31,18 @@ For production, prefer providing an external Kerberos secret or RWX volume conta
 
 Kerberos clients should use the StatefulSet broker DNS names from the headless service. If exposing Kafka through an Istio TCP route, add a matching `kafka/<external-host>@REALM` service principal and keytab, or override the advertised listener and Kerberos principal pattern accordingly.
 
+## Broker persistence
+
+Broker data uses PVCs by default. For ephemeral/dev clusters that should not create PVCs, disable broker persistence:
+
+```yaml
+kafka:
+  persistence:
+    enabled: false
+```
+
+With persistence disabled, the broker data path is still mounted, but it uses `emptyDir` and is lost when the pod is deleted.
+
 ## Multi-cluster example
 
 ```yaml

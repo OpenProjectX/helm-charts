@@ -4,6 +4,9 @@ kerberos:
     enabled: false
 
 kafka:
+  persistence:
+    enabled: false
+
   saslEnabledMechanisms: PLAIN
   saslMechanismInterBrokerProtocol: PLAIN
   saslKerberosServiceName: ""
