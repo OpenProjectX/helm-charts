@@ -60,6 +60,14 @@ kerberos:
     resources: {}
 
 kafka:
+  # Optional multi-cluster mode. When empty, the chart renders one backward-compatible cluster
+  # from the top-level kafka.* values below. Each item may override the same fields.
+  clusters: []
+  # - name: primary
+  #   clusterId: MkU3OEVBNTcwNTJENDM2Qk
+  # - name: standby
+  #   clusterId: zlFiTJelTOuhnklFwLWixw
+
   replicaCount: 2
   image:
     repository: apache/kafka
@@ -108,6 +116,10 @@ kafka:
     keytabPattern: /kerby/keytabs/kafka-%d.keytab
     principalPattern: kafka/%s@EXAMPLE.COM
     jaasPath: /tmp/kafka_server_jaas.conf
+  jaas:
+    enabled: false
+    path: /tmp/kafka_server_jaas.conf
+    config: ""
   superUsers:
     - User:kafbat-ui/kafbat-ui.example.com@EXAMPLE.COM
     - User:mm2/mm2.example.com@EXAMPLE.COM
@@ -140,6 +152,7 @@ schemaRegistry:
     type: ClusterIP
     port: 8085
   hostName: schema-registry.example.com
+  kafkaCluster: ""
   bootstrapServers: ""
   kerberos:
     enabled: true
@@ -160,8 +173,10 @@ kafbatUi:
     type: ClusterIP
     port: 8080
   dynamicConfigEnabled: "false"
+  autoClusters: false
   clusters:
     - name: kerberos-local
+      kafkaCluster: ""
       bootstrapServers: ""
       schemaRegistry: ""
   kerberos:
@@ -174,6 +189,7 @@ kafbatUi:
 
 topicInit:
   enabled: true
+  kafkaCluster: ""
   image:
     repository: apache/kafka
     tag: 3.9.0

@@ -1,4 +1,13 @@
 {{- if .Values.schemaRegistry.enabled }}
+{{- $kafkaClusters := include "kafka.effectiveClusters" . | fromYamlArray }}
+{{- $targetCluster := first $kafkaClusters }}
+{{- if .Values.schemaRegistry.kafkaCluster }}
+{{- range $candidate := $kafkaClusters }}
+{{- if eq $candidate.name $.Values.schemaRegistry.kafkaCluster }}
+{{- $targetCluster = $candidate }}
+{{- end }}
+{{- end }}
+{{- end }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -54,7 +63,7 @@ spec:
             - name: SCHEMA_REGISTRY_LISTENERS
               value: "http://0.0.0.0:{{ .Values.schemaRegistry.service.port }}"
             - name: SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS
-              value: {{ default (include "kafka.bootstrapServersWithProtocol" .) .Values.schemaRegistry.bootstrapServers | quote }}
+              value: {{ default (include "kafka.cluster.bootstrapServersWithProtocol" (dict "root" . "cluster" $targetCluster)) .Values.schemaRegistry.bootstrapServers | quote }}
             {{- if and .Values.kerberos.enabled .Values.schemaRegistry.kerberos.enabled }}
             - name: SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL
               value: SASL_PLAINTEXT

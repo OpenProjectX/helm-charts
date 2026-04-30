@@ -1,4 +1,13 @@
 {{- if .Values.topicInit.enabled }}
+{{- $kafkaClusters := include "kafka.effectiveClusters" . | fromYamlArray }}
+{{- $targetCluster := first $kafkaClusters }}
+{{- if .Values.topicInit.kafkaCluster }}
+{{- range $candidate := $kafkaClusters }}
+{{- if eq $candidate.name $.Values.topicInit.kafkaCluster }}
+{{- $targetCluster = $candidate }}
+{{- end }}
+{{- end }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -40,11 +49,11 @@ spec:
             - |
               export KAFKA_OPTS="-Djava.security.krb5.conf={{ .Values.kerberos.krb5ConfigPath }} ${KAFKA_OPTS:-}"
               for i in $(seq 1 {{ int .Values.topicInit.waitAttempts }}); do
-                /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.bootstrapServers" . }} --command-config /etc/kafka/client.properties --list >/dev/null && break
+                /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.cluster.bootstrapServers" (dict "root" . "cluster" $targetCluster) }} --command-config /etc/kafka/client.properties --list >/dev/null && break
                 sleep {{ int .Values.topicInit.waitSeconds }}
               done
               {{- range .Values.topicInit.topics }}
-              /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.bootstrapServers" $ }} --command-config /etc/kafka/client.properties --create --topic {{ .name | quote }} --partitions {{ .partitions }} --replication-factor {{ .replicationFactor }} --if-not-exists
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.cluster.bootstrapServers" (dict "root" $ "cluster" $targetCluster) }} --command-config /etc/kafka/client.properties --create --topic {{ .name | quote }} --partitions {{ .partitions }} --replication-factor {{ .replicationFactor }} --if-not-exists
               {{- end }}
           volumeMounts:
             - name: topic-init-config

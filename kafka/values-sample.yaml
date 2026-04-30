@@ -1,0 +1,136 @@
+kerberos:
+  enabled: false
+  kdc:
+    enabled: false
+
+kafka:
+  saslEnabledMechanisms: PLAIN
+  saslMechanismInterBrokerProtocol: PLAIN
+  saslKerberosServiceName: ""
+  superUsers:
+    - User:admin
+    - User:kafbat-ui
+    - User:schema-registry
+    - User:mm2
+
+  config:
+    KAFKA_LISTENER_NAME_SASL_PLAINTEXT_PLAIN_SASL_JAAS_CONFIG: >-
+      org.apache.kafka.common.security.plain.PlainLoginModule required
+      username="admin"
+      password="admin-secret"
+      user_admin="admin-secret"
+      user_kafbat-ui="ui-secret"
+      user_schema-registry="schema-secret"
+      user_mm2="mm2-secret";
+  jaas:
+    enabled: true
+    config: |
+      KafkaServer {
+        org.apache.kafka.common.security.plain.PlainLoginModule required
+        username="admin"
+        password="admin-secret"
+        user_admin="admin-secret"
+        user_kafbat-ui="ui-secret"
+        user_schema-registry="schema-secret"
+        user_mm2="mm2-secret";
+      };
+
+  clusters:
+    - name: primary
+      clusterId: MkU3OEVBNTcwNTJENDM2Qk
+      replicaCount: 2
+
+    - name: standby
+      clusterId: zlFiTJelTOuhnklFwLWixw
+      replicaCount: 2
+
+schemaRegistry:
+  enabled: true
+  kafkaCluster: primary
+  kerberos:
+    enabled: false
+  env:
+    SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: SASL_PLAINTEXT
+    SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM: PLAIN
+    SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG: >-
+      org.apache.kafka.common.security.plain.PlainLoginModule required
+      username="schema-registry"
+      password="schema-secret";
+
+kafbatUi:
+  enabled: true
+  autoClusters: true
+  clusters: []
+  kerberos:
+    enabled: false
+  env:
+    KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SASL_PLAINTEXT
+    KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
+    KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG: >-
+      org.apache.kafka.common.security.plain.PlainLoginModule required
+      username="kafbat-ui"
+      password="ui-secret";
+    KAFKA_CLUSTERS_1_PROPERTIES_SECURITY_PROTOCOL: SASL_PLAINTEXT
+    KAFKA_CLUSTERS_1_PROPERTIES_SASL_MECHANISM: PLAIN
+    KAFKA_CLUSTERS_1_PROPERTIES_SASL_JAAS_CONFIG: >-
+      org.apache.kafka.common.security.plain.PlainLoginModule required
+      username="kafbat-ui"
+      password="ui-secret";
+
+topicInit:
+  enabled: true
+  kafkaCluster: primary
+  commandConfig: |
+    security.protocol=SASL_PLAINTEXT
+    sasl.mechanism=PLAIN
+    sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+
+mirrorMaker:
+  enabled: true
+  properties: |
+    clusters = primary, standby
+    
+    primary.bootstrap.servers = kafka-kafka-primary-0.kafka-kafka-primary-headless.kafka.svc.cluster.local:9092,kafka-kafka-primary-1.kafka-kafka-primary-headless.kafka.svc.cluster.local:9092
+    standby.bootstrap.servers = kafka-kafka-standby-0.kafka-kafka-standby-headless.kafka.svc.cluster.local:9092,kafka-kafka-standby-1.kafka-kafka-standby-headless.kafka.svc.cluster.local:9092
+    
+    primary.security.protocol = SASL_PLAINTEXT
+    primary.sasl.mechanism = PLAIN
+    primary.sasl.jaas.config = org.apache.kafka.common.security.plain.PlainLoginModule required username="mm2" password="mm2-secret";
+    
+    standby.security.protocol = SASL_PLAINTEXT
+    standby.sasl.mechanism = PLAIN
+    standby.sasl.jaas.config = org.apache.kafka.common.security.plain.PlainLoginModule required username="mm2" password="mm2-secret";
+    
+    primary->standby.enabled = true
+    primary->standby.topics = .*
+
+    standby->primary.enabled = false
+    standby->primary.topics = $^
+    standby->primary.emit.heartbeats.enabled = false
+    standby->primary.emit.checkpoints.enabled = false
+    standby->primary.sync.group.offsets.enabled = false
+
+    primary->standby.emit.checkpoints.enabled = false
+    primary->standby.sync.group.offsets.enabled = false
+
+    offset.storage.replication.factor = 1
+    config.storage.replication.factor = 1
+    status.storage.replication.factor = 1
+
+    replication.factor = 1
+    checkpoints.topic.replication.factor = 1
+    heartbeats.topic.replication.factor = 1
+    offset-syncs.topic.replication.factor = 1
+
+istio:
+  enabled: true
+  parentRefs:
+    - name: k8s-infra-gateway
+      namespace: istio-ingress
+
+  httpRoutes:
+    ui:
+      enabled: true
+      hostnames:
+        -  ui.kafka.cn-guangzhou-a.k8s.openprojectx.org
+      port: 8080

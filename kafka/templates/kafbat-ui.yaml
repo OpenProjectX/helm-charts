@@ -53,28 +53,62 @@ spec:
               value: "-Djava.security.krb5.conf={{ .Values.kerberos.krb5ConfigPath }}"
             - name: DYNAMIC_CONFIG_ENABLED
               value: {{ .Values.kafbatUi.dynamicConfigEnabled | quote }}
-            {{- range $i, $cluster := .Values.kafbatUi.clusters }}
-            - name: KAFKA_CLUSTERS_{{ $i }}_NAME
-              value: {{ $cluster.name | quote }}
-            - name: KAFKA_CLUSTERS_{{ $i }}_BOOTSTRAPSERVERS
-              value: {{ default (include "kafka.bootstrapServers" $) $cluster.bootstrapServers | quote }}
-            {{- if $cluster.schemaRegistry }}
-            - name: KAFKA_CLUSTERS_{{ $i }}_SCHEMAREGISTRY
-              value: {{ $cluster.schemaRegistry | quote }}
-            {{- else if $.Values.schemaRegistry.enabled }}
-            - name: KAFKA_CLUSTERS_{{ $i }}_SCHEMAREGISTRY
+            {{- $kafkaClusters := include "kafka.effectiveClusters" . | fromYamlArray }}
+            {{- $idx := 0 }}
+            {{- if .Values.kafbatUi.autoClusters }}
+            {{- range $kafkaCluster := $kafkaClusters }}
+            - name: KAFKA_CLUSTERS_{{ $idx }}_NAME
+              value: {{ default "default" $kafkaCluster.name | quote }}
+            - name: KAFKA_CLUSTERS_{{ $idx }}_BOOTSTRAPSERVERS
+              value: {{ include "kafka.cluster.bootstrapServers" (dict "root" $ "cluster" $kafkaCluster) | quote }}
+            {{- if $.Values.schemaRegistry.enabled }}
+            - name: KAFKA_CLUSTERS_{{ $idx }}_SCHEMAREGISTRY
               value: {{ printf "http://%s-schema-registry:%v" (include "kafka.fullname" $) $.Values.schemaRegistry.service.port | quote }}
             {{- end }}
             {{- if and $.Values.kerberos.enabled $.Values.kafbatUi.kerberos.enabled }}
-            - name: KAFKA_CLUSTERS_{{ $i }}_PROPERTIES_SECURITY_PROTOCOL
+            - name: KAFKA_CLUSTERS_{{ $idx }}_PROPERTIES_SECURITY_PROTOCOL
               value: SASL_PLAINTEXT
-            - name: KAFKA_CLUSTERS_{{ $i }}_PROPERTIES_SASL_MECHANISM
+            - name: KAFKA_CLUSTERS_{{ $idx }}_PROPERTIES_SASL_MECHANISM
               value: GSSAPI
-            - name: KAFKA_CLUSTERS_{{ $i }}_PROPERTIES_SASL_KERBEROS_SERVICE_NAME
+            - name: KAFKA_CLUSTERS_{{ $idx }}_PROPERTIES_SASL_KERBEROS_SERVICE_NAME
               value: {{ $.Values.kafka.saslKerberosServiceName | quote }}
-            - name: KAFKA_CLUSTERS_{{ $i }}_PROPERTIES_SASL_JAAS_CONFIG
+            - name: KAFKA_CLUSTERS_{{ $idx }}_PROPERTIES_SASL_JAAS_CONFIG
               value: {{ printf "com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"%s\" principal=\"%s\";" $.Values.kafbatUi.kerberos.keytab $.Values.kafbatUi.kerberos.principal | quote }}
             {{- end }}
+            {{- $idx = add1 $idx }}
+            {{- end }}
+            {{- end }}
+            {{- range $cluster := .Values.kafbatUi.clusters }}
+            {{- $targetCluster := first $kafkaClusters }}
+            {{- if $cluster.kafkaCluster }}
+            {{- range $candidate := $kafkaClusters }}
+            {{- if eq $candidate.name $cluster.kafkaCluster }}
+            {{- $targetCluster = $candidate }}
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            - name: KAFKA_CLUSTERS_{{ $idx }}_NAME
+              value: {{ $cluster.name | quote }}
+            - name: KAFKA_CLUSTERS_{{ $idx }}_BOOTSTRAPSERVERS
+              value: {{ default (include "kafka.cluster.bootstrapServers" (dict "root" $ "cluster" $targetCluster)) $cluster.bootstrapServers | quote }}
+            {{- if $cluster.schemaRegistry }}
+            - name: KAFKA_CLUSTERS_{{ $idx }}_SCHEMAREGISTRY
+              value: {{ $cluster.schemaRegistry | quote }}
+            {{- else if $.Values.schemaRegistry.enabled }}
+            - name: KAFKA_CLUSTERS_{{ $idx }}_SCHEMAREGISTRY
+              value: {{ printf "http://%s-schema-registry:%v" (include "kafka.fullname" $) $.Values.schemaRegistry.service.port | quote }}
+            {{- end }}
+            {{- if and $.Values.kerberos.enabled $.Values.kafbatUi.kerberos.enabled }}
+            - name: KAFKA_CLUSTERS_{{ $idx }}_PROPERTIES_SECURITY_PROTOCOL
+              value: SASL_PLAINTEXT
+            - name: KAFKA_CLUSTERS_{{ $idx }}_PROPERTIES_SASL_MECHANISM
+              value: GSSAPI
+            - name: KAFKA_CLUSTERS_{{ $idx }}_PROPERTIES_SASL_KERBEROS_SERVICE_NAME
+              value: {{ $.Values.kafka.saslKerberosServiceName | quote }}
+            - name: KAFKA_CLUSTERS_{{ $idx }}_PROPERTIES_SASL_JAAS_CONFIG
+              value: {{ printf "com.sun.security.auth.module.Krb5LoginModule required useKeyTab=true storeKey=true keyTab=\"%s\" principal=\"%s\";" $.Values.kafbatUi.kerberos.keytab $.Values.kafbatUi.kerberos.principal | quote }}
+            {{- end }}
+            {{- $idx = add1 $idx }}
             {{- end }}
             {{- range $name, $value := .Values.kafbatUi.env }}
             - name: {{ $name }}
