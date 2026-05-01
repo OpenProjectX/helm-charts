@@ -8,6 +8,7 @@
 {{- end }}
 {{- end }}
 {{- end }}
+{{- if not .Values.topicInit.commandConfigExistingSecret }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -19,6 +20,7 @@ data:
   client.properties: |
     {{- .Values.topicInit.commandConfig | nindent 4 }}
 ---
+{{- end }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -48,18 +50,35 @@ spec:
             - -ec
             - |
               export KAFKA_OPTS="-Djava.security.krb5.conf={{ .Values.kerberos.krb5ConfigPath }} ${KAFKA_OPTS:-}"
+              {{- if .Values.topicInit.commandConfigSecretExistingSecret }}
+              cat /etc/kafka/client-common.properties /etc/kafka/client-secret.properties > /tmp/client.properties
+              COMMAND_CONFIG=/tmp/client.properties
+              {{- else }}
+              COMMAND_CONFIG=/etc/kafka/client.properties
+              {{- end }}
               for i in $(seq 1 {{ int .Values.topicInit.waitAttempts }}); do
-                /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.cluster.bootstrapServers" (dict "root" . "cluster" $targetCluster) }} --command-config /etc/kafka/client.properties --list >/dev/null && break
+                /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.cluster.bootstrapServers" (dict "root" . "cluster" $targetCluster) }} --command-config "${COMMAND_CONFIG}" --list >/dev/null && break
                 sleep {{ int .Values.topicInit.waitSeconds }}
               done
               {{- range .Values.topicInit.topics }}
-              /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.cluster.bootstrapServers" (dict "root" $ "cluster" $targetCluster) }} --command-config /etc/kafka/client.properties --create --topic {{ .name | quote }} --partitions {{ .partitions }} --replication-factor {{ .replicationFactor }} --if-not-exists
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server {{ include "kafka.cluster.bootstrapServers" (dict "root" $ "cluster" $targetCluster) }} --command-config "${COMMAND_CONFIG}" --create --topic {{ .name | quote }} --partitions {{ .partitions }} --replication-factor {{ .replicationFactor }} --if-not-exists
               {{- end }}
           volumeMounts:
             - name: topic-init-config
+              {{- if .Values.topicInit.commandConfigSecretExistingSecret }}
+              mountPath: /etc/kafka/client-common.properties
+              subPath: client.properties
+              {{- else }}
               mountPath: /etc/kafka/client.properties
               subPath: client.properties
+              {{- end }}
               readOnly: true
+            {{- if .Values.topicInit.commandConfigSecretExistingSecret }}
+            - name: topic-init-secret-config
+              mountPath: /etc/kafka/client-secret.properties
+              subPath: client-secret.properties
+              readOnly: true
+            {{- end }}
             {{- if .Values.kerberos.enabled }}
             - name: kerberos
               mountPath: {{ .Values.kerberos.mountPath }}
@@ -71,8 +90,24 @@ spec:
           {{- end }}
       volumes:
         - name: topic-init-config
+          {{- if .Values.topicInit.commandConfigExistingSecret }}
+          secret:
+            secretName: {{ .Values.topicInit.commandConfigExistingSecret }}
+            items:
+              - key: {{ .Values.topicInit.commandConfigExistingSecretKey }}
+                path: client.properties
+          {{- else }}
           configMap:
             name: {{ include "kafka.fullname" . }}-topic-init
+          {{- end }}
+        {{- if .Values.topicInit.commandConfigSecretExistingSecret }}
+        - name: topic-init-secret-config
+          secret:
+            secretName: {{ .Values.topicInit.commandConfigSecretExistingSecret }}
+            items:
+              - key: {{ .Values.topicInit.commandConfigSecretExistingSecretKey }}
+                path: client-secret.properties
+        {{- end }}
         {{- if .Values.kerberos.enabled }}
         - name: kerberos
           {{- if and .Values.kerberos.kdc.enabled (not .Values.kerberos.existingSecret) }}

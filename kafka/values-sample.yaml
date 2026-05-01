@@ -16,27 +16,10 @@ kafka:
     - User:schema-registry
     - User:mm2
 
-  config:
-    KAFKA_LISTENER_NAME_SASL_PLAINTEXT_PLAIN_SASL_JAAS_CONFIG: >-
-      org.apache.kafka.common.security.plain.PlainLoginModule required
-      username="admin"
-      password="admin-secret"
-      user_admin="admin-secret"
-      user_kafbat-ui="ui-secret"
-      user_schema-registry="schema-secret"
-      user_mm2="mm2-secret";
   jaas:
     enabled: true
-    config: |
-      KafkaServer {
-        org.apache.kafka.common.security.plain.PlainLoginModule required
-        username="admin"
-        password="admin-secret"
-        user_admin="admin-secret"
-        user_kafbat-ui="ui-secret"
-        user_schema-registry="schema-secret"
-        user_mm2="mm2-secret";
-      };
+    existingSecret: kafka-auth
+    existingSecretKey: kafka-server-jaas.conf
 
   clusters:
     - name: primary
@@ -55,12 +38,18 @@ schemaRegistry:
   env:
     SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: SASL_PLAINTEXT
     SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM: PLAIN
-    SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG: >-
-      org.apache.kafka.common.security.plain.PlainLoginModule required
-      username="schema-registry"
-      password="schema-secret";
+  extraEnv:
+    - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG
+      valueFrom:
+        secretKeyRef:
+          name: kafka-auth
+          key: schema-registry-jaas.conf
 
 kafbatUi:
+  image:
+    repository: ghcr.io/openprojectx/kafka-ui
+    tag: latest
+    pullPolicy: Always
   enabled: true
   autoClusters: true
   clusters: []
@@ -69,43 +58,49 @@ kafbatUi:
   env:
     KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SASL_PLAINTEXT
     KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
-    KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG: >-
-      org.apache.kafka.common.security.plain.PlainLoginModule required
-      username="kafbat-ui"
-      password="ui-secret";
     KAFKA_CLUSTERS_1_PROPERTIES_SECURITY_PROTOCOL: SASL_PLAINTEXT
     KAFKA_CLUSTERS_1_PROPERTIES_SASL_MECHANISM: PLAIN
-    KAFKA_CLUSTERS_1_PROPERTIES_SASL_JAAS_CONFIG: >-
-      org.apache.kafka.common.security.plain.PlainLoginModule required
-      username="kafbat-ui"
-      password="ui-secret";
+  extraEnv:
+    - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG
+      valueFrom:
+        secretKeyRef:
+          name: kafka-auth
+          key: kafbat-ui-jaas.conf
+    - name: KAFKA_CLUSTERS_1_PROPERTIES_SASL_JAAS_CONFIG
+      valueFrom:
+        secretKeyRef:
+          name: kafka-auth
+          key: kafbat-ui-jaas.conf
 
 topicInit:
   enabled: true
   kafkaCluster: primary
+  commandConfigSecretExistingSecret: kafka-auth
+  commandConfigSecretExistingSecretKey: client-secret.properties
   commandConfig: |
     security.protocol=SASL_PLAINTEXT
     sasl.mechanism=PLAIN
-    sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
 
 mirrorMaker:
   enabled: true
+  secretPropertiesExistingSecret: kafka-mm2
+  secretPropertiesExistingSecretKey: mm2-secret.properties
   properties: |
     clusters = primary, standby
-    
+
     primary.bootstrap.servers = kafka-kafka-primary-0.kafka-kafka-primary-headless.kafka.svc.cluster.local:9092,kafka-kafka-primary-1.kafka-kafka-primary-headless.kafka.svc.cluster.local:9092
     standby.bootstrap.servers = kafka-kafka-standby-0.kafka-kafka-standby-headless.kafka.svc.cluster.local:9092,kafka-kafka-standby-1.kafka-kafka-standby-headless.kafka.svc.cluster.local:9092
-    
+
     primary.security.protocol = SASL_PLAINTEXT
     primary.sasl.mechanism = PLAIN
-    primary.sasl.jaas.config = org.apache.kafka.common.security.plain.PlainLoginModule required username="mm2" password="mm2-secret";
-    
     standby.security.protocol = SASL_PLAINTEXT
     standby.sasl.mechanism = PLAIN
-    standby.sasl.jaas.config = org.apache.kafka.common.security.plain.PlainLoginModule required username="mm2" password="mm2-secret";
-    
+
     primary->standby.enabled = true
     primary->standby.topics = .*
+    replication.policy.class = org.apache.kafka.connect.mirror.IdentityReplicationPolicy
+    refresh.topics.interval.seconds = 10
+    sync.topic.configs.interval.seconds = 10
 
     standby->primary.enabled = false
     standby->primary.topics = $^

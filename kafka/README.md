@@ -43,6 +43,77 @@ kafka:
 
 With persistence disabled, the broker data path is still mounted, but it uses `emptyDir` and is lost when the pod is deleted.
 
+## User-managed SASL secrets
+
+For SASL/PLAIN, keep credentials in Kubernetes Secrets and point the chart at those secrets instead of putting JAAS strings in values files.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kafka-auth
+type: Opaque
+stringData:
+  kafka-server-jaas.conf: |
+    KafkaServer {
+      org.apache.kafka.common.security.plain.PlainLoginModule required
+      username="admin"
+      password="admin-secret"
+      user_admin="admin-secret"
+      user_kafbat-ui="ui-secret"
+      user_schema-registry="schema-secret"
+      user_mm2="mm2-secret";
+    };
+  schema-registry-jaas.conf: |
+    org.apache.kafka.common.security.plain.PlainLoginModule required username="schema-registry" password="schema-secret";
+  kafbat-ui-jaas.conf: |
+    org.apache.kafka.common.security.plain.PlainLoginModule required username="kafbat-ui" password="ui-secret";
+  client-secret.properties: |
+    sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="admin" password="admin-secret";
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kafka-mm2
+type: Opaque
+stringData:
+  mm2-secret.properties: |
+    primary.sasl.jaas.config = org.apache.kafka.common.security.plain.PlainLoginModule required username="mm2" password="mm2-secret";
+    standby.sasl.jaas.config = org.apache.kafka.common.security.plain.PlainLoginModule required username="mm2" password="mm2-secret";
+```
+
+Then reference them from values:
+
+```yaml
+kafka:
+  jaas:
+    enabled: true
+    existingSecret: kafka-auth
+    existingSecretKey: kafka-server-jaas.conf
+
+topicInit:
+  commandConfig: |
+    security.protocol=SASL_PLAINTEXT
+    sasl.mechanism=PLAIN
+  commandConfigSecretExistingSecret: kafka-auth
+  commandConfigSecretExistingSecretKey: client-secret.properties
+
+mirrorMaker:
+  properties: |
+    clusters = primary, standby
+    primary.bootstrap.servers = kafka-kafka-primary-0.kafka-kafka-primary-headless.kafka.svc.cluster.local:9092,kafka-kafka-primary-1.kafka-kafka-primary-headless.kafka.svc.cluster.local:9092
+    standby.bootstrap.servers = kafka-kafka-standby-0.kafka-kafka-standby-headless.kafka.svc.cluster.local:9092,kafka-kafka-standby-1.kafka-kafka-standby-headless.kafka.svc.cluster.local:9092
+    primary.security.protocol = SASL_PLAINTEXT
+    primary.sasl.mechanism = PLAIN
+    standby.security.protocol = SASL_PLAINTEXT
+    standby.sasl.mechanism = PLAIN
+    primary->standby.enabled = true
+    primary->standby.topics = .*
+    replication.policy.class = org.apache.kafka.connect.mirror.IdentityReplicationPolicy
+  secretPropertiesExistingSecret: kafka-mm2
+  secretPropertiesExistingSecretKey: mm2-secret.properties
+```
+
 ## Multi-cluster example
 
 ```yaml
@@ -83,6 +154,7 @@ mirrorMaker:
 
     primary->standby.enabled = true
     primary->standby.topics = .*
+    replication.policy.class = org.apache.kafka.connect.mirror.IdentityReplicationPolicy
     replication.factor = 1
     checkpoints.topic.replication.factor = 1
     heartbeats.topic.replication.factor = 1

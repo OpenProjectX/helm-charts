@@ -170,10 +170,14 @@ spec:
               export KAFKA_OPTS="-Djava.security.krb5.conf={{ $root.Values.kerberos.krb5ConfigPath }} -Djava.security.auth.login.config={{ default $root.Values.kafka.kerberos.jaasPath (dig "kerberos" "jaasPath" nil $cluster) }} ${KAFKA_OPTS:-}"
               {{- end }}
               {{- if (default $root.Values.kafka.jaas.enabled (dig "jaas" "enabled" nil $cluster)) }}
+              {{- if (default $root.Values.kafka.jaas.existingSecret (dig "jaas" "existingSecret" nil $cluster)) }}
+              export KAFKA_OPTS="-Djava.security.auth.login.config={{ default $root.Values.kafka.jaas.path (dig "jaas" "path" nil $cluster) }} ${KAFKA_OPTS:-}"
+              {{- else }}
               cat > {{ default $root.Values.kafka.jaas.path (dig "jaas" "path" nil $cluster) }} <<'EOF'
               {{- default $root.Values.kafka.jaas.config (dig "jaas" "config" nil $cluster) | nindent 14 }}
               EOF
               export KAFKA_OPTS="-Djava.security.auth.login.config={{ default $root.Values.kafka.jaas.path (dig "jaas" "path" nil $cluster) }} ${KAFKA_OPTS:-}"
+              {{- end }}
               {{- end }}
               exec /etc/kafka/docker/run
           ports:
@@ -204,6 +208,12 @@ spec:
               mountPath: {{ $root.Values.kerberos.mountPath }}
               readOnly: true
             {{- end }}
+            {{- if and (default $root.Values.kafka.jaas.enabled (dig "jaas" "enabled" nil $cluster)) (default $root.Values.kafka.jaas.existingSecret (dig "jaas" "existingSecret" nil $cluster)) }}
+            - name: kafka-jaas
+              mountPath: {{ default $root.Values.kafka.jaas.path (dig "jaas" "path" nil $cluster) }}
+              subPath: {{ default $root.Values.kafka.jaas.existingSecretKey (dig "jaas" "existingSecretKey" nil $cluster) }}
+              readOnly: true
+            {{- end }}
             {{- with (concat (default list $root.Values.kafka.extraVolumeMounts) (default list $cluster.extraVolumeMounts)) }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -232,6 +242,14 @@ spec:
         - name: data
           emptyDir:
             {{- toYaml (default $root.Values.kafka.persistence.emptyDir (dig "persistence" "emptyDir" nil $cluster)) | nindent 12 }}
+        {{- end }}
+        {{- if and (default $root.Values.kafka.jaas.enabled (dig "jaas" "enabled" nil $cluster)) (default $root.Values.kafka.jaas.existingSecret (dig "jaas" "existingSecret" nil $cluster)) }}
+        - name: kafka-jaas
+          secret:
+            secretName: {{ default $root.Values.kafka.jaas.existingSecret (dig "jaas" "existingSecret" nil $cluster) }}
+            items:
+              - key: {{ default $root.Values.kafka.jaas.existingSecretKey (dig "jaas" "existingSecretKey" nil $cluster) }}
+                path: {{ default $root.Values.kafka.jaas.existingSecretKey (dig "jaas" "existingSecretKey" nil $cluster) }}
         {{- end }}
         {{- if $root.Values.kerberos.enabled }}
         - name: kerberos

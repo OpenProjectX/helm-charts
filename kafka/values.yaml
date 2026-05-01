@@ -120,6 +120,8 @@ kafka:
     enabled: false
     path: /tmp/kafka_server_jaas.conf
     config: ""
+    existingSecret: ""
+    existingSecretKey: kafka-server-jaas.conf
   superUsers:
     - User:kafbat-ui/kafbat-ui.example.com@EXAMPLE.COM
     - User:mm2/mm2.example.com@EXAMPLE.COM
@@ -170,7 +172,7 @@ kafbatUi:
   image:
     repository: ghcr.io/openprojectx/kafka-ui
     tag: 0.0.1-SNAPSHOT
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 8080
@@ -192,6 +194,12 @@ kafbatUi:
 topicInit:
   enabled: true
   kafkaCluster: ""
+  # Full override: mount this secret key directly as client.properties.
+  commandConfigExistingSecret: ""
+  commandConfigExistingSecretKey: client.properties
+  # Split mode: keep non-secret commandConfig in the chart, append this secret key at runtime.
+  commandConfigSecretExistingSecret: ""
+  commandConfigSecretExistingSecretKey: client-secret.properties
   image:
     repository: apache/kafka
     tag: 3.9.0
@@ -222,6 +230,12 @@ topicInit:
 
 mirrorMaker:
   enabled: false
+  # Full override: mount this secret key directly as mm2.properties.
+  propertiesExistingSecret: ""
+  propertiesExistingSecretKey: mm2.properties
+  # Split mode: keep non-secret properties in the chart, append this secret key at runtime.
+  secretPropertiesExistingSecret: ""
+  secretPropertiesExistingSecretKey: mm2-secret.properties
   image:
     repository: apache/kafka
     tag: 3.9.0

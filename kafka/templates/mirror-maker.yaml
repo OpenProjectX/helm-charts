@@ -1,4 +1,5 @@
 {{- if .Values.mirrorMaker.enabled }}
+{{- if not .Values.mirrorMaker.propertiesExistingSecret }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,6 +11,7 @@ data:
   mm2.properties: |
     {{- .Values.mirrorMaker.properties | nindent 4 }}
 ---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,12 +44,28 @@ spec:
             - -ec
             - |
               export KAFKA_OPTS="-Djava.security.krb5.conf={{ .Values.kerberos.krb5ConfigPath }} ${KAFKA_OPTS:-}"
+              {{- if .Values.mirrorMaker.secretPropertiesExistingSecret }}
+              cat /etc/kafka/mm2-common.properties /etc/kafka/mm2-secret.properties > /tmp/mm2.properties
+              exec /opt/kafka/bin/connect-mirror-maker.sh /tmp/mm2.properties
+              {{- else }}
               exec /opt/kafka/bin/connect-mirror-maker.sh /etc/kafka/mm2.properties
+              {{- end }}
           volumeMounts:
             - name: mirror-maker-config
+              {{- if .Values.mirrorMaker.secretPropertiesExistingSecret }}
+              mountPath: /etc/kafka/mm2-common.properties
+              subPath: mm2.properties
+              {{- else }}
               mountPath: /etc/kafka/mm2.properties
               subPath: mm2.properties
+              {{- end }}
               readOnly: true
+            {{- if .Values.mirrorMaker.secretPropertiesExistingSecret }}
+            - name: mirror-maker-secret-config
+              mountPath: /etc/kafka/mm2-secret.properties
+              subPath: mm2-secret.properties
+              readOnly: true
+            {{- end }}
             {{- if .Values.kerberos.enabled }}
             - name: kerberos
               mountPath: {{ .Values.kerberos.mountPath }}
@@ -59,8 +77,24 @@ spec:
           {{- end }}
       volumes:
         - name: mirror-maker-config
+          {{- if .Values.mirrorMaker.propertiesExistingSecret }}
+          secret:
+            secretName: {{ .Values.mirrorMaker.propertiesExistingSecret }}
+            items:
+              - key: {{ .Values.mirrorMaker.propertiesExistingSecretKey }}
+                path: mm2.properties
+          {{- else }}
           configMap:
             name: {{ include "kafka.fullname" . }}-mirror-maker
+          {{- end }}
+        {{- if .Values.mirrorMaker.secretPropertiesExistingSecret }}
+        - name: mirror-maker-secret-config
+          secret:
+            secretName: {{ .Values.mirrorMaker.secretPropertiesExistingSecret }}
+            items:
+              - key: {{ .Values.mirrorMaker.secretPropertiesExistingSecretKey }}
+                path: mm2-secret.properties
+        {{- end }}
         {{- if .Values.kerberos.enabled }}
         - name: kerberos
           {{- if and .Values.kerberos.kdc.enabled (not .Values.kerberos.existingSecret) }}
