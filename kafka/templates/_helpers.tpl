@@ -30,6 +30,14 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default "cluster.local" .Values.clusterDomain -}}
 {{- end -}}
 
+{{- define "kafka.serviceAccountName" -}}
+{{- if .Values.serviceAccount.create -}}
+{{- default (include "kafka.fullname" .) .Values.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}
+
 {{- define "kafka.headlessServiceName" -}}
 {{- default (printf "%s-headless" (include "kafka.fullname" .)) .Values.kafka.headlessService.nameOverride -}}
 {{- end -}}

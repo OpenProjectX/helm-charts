@@ -13,10 +13,15 @@ Internal bootstrap endpoints:
 {{- end }}
 
 {{- $globalExternal := .Values.kafka.externalBrokerServices.enabled }}
+{{- $globalDiscovery := .Values.kafka.externalBrokerServices.autoDiscovery.enabled }}
 {{- $hasExternal := false }}
+{{- $hasStaticExternal := false }}
 {{- range $cluster := $clusters }}
 {{- if (default $globalExternal (dig "externalBrokerServices" "enabled" nil $cluster)) }}
 {{- $hasExternal = true }}
+{{- if not (default $globalDiscovery (dig "externalBrokerServices" "autoDiscovery" "enabled" nil $cluster)) }}
+{{- $hasStaticExternal = true }}
+{{- end }}
 {{- end }}
 {{- end }}
 
@@ -39,6 +44,10 @@ External broker LoadBalancer services:
 Check assigned LoadBalancer IPs/hostnames:
   kubectl -n {{ $namespace }} get svc -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=broker -o wide
 
+{{- if not $hasStaticExternal }}
+Broker external advertised listener discovery is enabled. Each broker waits for its
+own LoadBalancer Service address at startup and advertises that address automatically.
+{{- else }}
 If your LoadBalancer IPs were assigned dynamically, copy this upgrade command after the
 external services show an EXTERNAL-IP/hostname. It updates Kafka advertised.listeners
 to match the assigned per-broker addresses.
@@ -71,4 +80,5 @@ to match the assigned per-broker addresses.
 For production, prefer reserving static LoadBalancer IPs and setting both
 externalBrokerServices.loadBalancerIPs and externalBrokerServices.advertisedHosts
 before the first install.
+{{- end }}
 {{- end }}

@@ -51,12 +51,24 @@ Kafka external access needs one stable address per broker. Enable per-broker Loa
 kafka:
   externalBrokerServices:
     enabled: true
+```
+
+By default, the chart creates a ServiceAccount plus namespaced RBAC, then each broker initContainer waits for its own LoadBalancer Service address and uses it as the external advertised listener. This avoids the install-then-upgrade flow for dynamically assigned LoadBalancer IPs.
+
+If you want to disable Kubernetes API discovery and provide static advertised hosts yourself:
+
+```yaml
+kafka:
+  externalBrokerServices:
+    enabled: true
+    autoDiscovery:
+      enabled: false
     advertisedHosts:
       - 203.0.113.10
       - 203.0.113.11
 ```
 
-For multi-cluster mode, configure the list per cluster:
+For multi-cluster mode, configure static lists per cluster only when `autoDiscovery.enabled=false`:
 
 ```yaml
 kafka:
@@ -64,18 +76,22 @@ kafka:
     - name: primary
       clusterId: MkU3OEVBNTcwNTJENDM2Qk
       externalBrokerServices:
+        autoDiscovery:
+          enabled: false
         advertisedHosts:
           - 203.0.113.10
           - 203.0.113.11
     - name: standby
       clusterId: zlFiTJelTOuhnklFwLWixw
       externalBrokerServices:
+        autoDiscovery:
+          enabled: false
         advertisedHosts:
           - 203.0.113.12
           - 203.0.113.13
 ```
 
-If your cloud provider assigns IPs dynamically, install once with external services enabled, read the assigned addresses, put those addresses into `advertisedHosts`, then run `helm upgrade`. For production, prefer reserving static IPs and setting `loadBalancerIPs` plus matching `advertisedHosts` up front when your provider supports `loadBalancerIP`.
+For production, static LoadBalancer IPs are still preferable when your provider supports them. Set `loadBalancerIPs` to reserve/request the service addresses. You can keep auto discovery enabled so brokers still read the actual assigned addresses at startup.
 
 ## User-managed SASL secrets
 

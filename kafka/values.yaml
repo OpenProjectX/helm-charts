@@ -10,6 +10,15 @@ nodeSelector: {}
 tolerations: []
 affinity: {}
 
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automountServiceAccountToken: true
+
+rbac:
+  create: true
+
 kerberos:
   enabled: true
   existingSecret: ""
@@ -99,6 +108,16 @@ kafka:
     containerPort: 19092
     protocol: TCP
     listenerName: EXTERNAL
+    autoDiscovery:
+      # When enabled, each broker initContainer waits for its own LoadBalancer
+      # Service address and uses that as the external advertised listener.
+      enabled: true
+      image:
+        repository: alpine/k8s
+        tag: 1.33.11
+        pullPolicy: IfNotPresent
+      timeoutSeconds: 600
+      pollIntervalSeconds: 5
   headlessService:
     nameOverride: ""
     annotations: {}

@@ -26,6 +26,12 @@
 {{- $externalSourceRanges := default $root.Values.kafka.externalBrokerServices.loadBalancerSourceRanges (dig "externalBrokerServices" "loadBalancerSourceRanges" nil $cluster) -}}
 {{- $externalLBIPs := default $root.Values.kafka.externalBrokerServices.loadBalancerIPs (dig "externalBrokerServices" "loadBalancerIPs" nil $cluster) -}}
 {{- $externalAdvertisedHosts := default $root.Values.kafka.externalBrokerServices.advertisedHosts (dig "externalBrokerServices" "advertisedHosts" nil $cluster) -}}
+{{- $externalAutoDiscoveryEnabled := default $root.Values.kafka.externalBrokerServices.autoDiscovery.enabled (dig "externalBrokerServices" "autoDiscovery" "enabled" nil $cluster) -}}
+{{- $externalAutoDiscoveryImage := default $root.Values.kafka.externalBrokerServices.autoDiscovery.image.repository (dig "externalBrokerServices" "autoDiscovery" "image" "repository" nil $cluster) -}}
+{{- $externalAutoDiscoveryTag := default $root.Values.kafka.externalBrokerServices.autoDiscovery.image.tag (dig "externalBrokerServices" "autoDiscovery" "image" "tag" nil $cluster) -}}
+{{- $externalAutoDiscoveryPullPolicy := default $root.Values.kafka.externalBrokerServices.autoDiscovery.image.pullPolicy (dig "externalBrokerServices" "autoDiscovery" "image" "pullPolicy" nil $cluster) -}}
+{{- $externalAutoDiscoveryTimeout := int (default $root.Values.kafka.externalBrokerServices.autoDiscovery.timeoutSeconds (dig "externalBrokerServices" "autoDiscovery" "timeoutSeconds" nil $cluster)) -}}
+{{- $externalAutoDiscoveryPollInterval := int (default $root.Values.kafka.externalBrokerServices.autoDiscovery.pollIntervalSeconds (dig "externalBrokerServices" "autoDiscovery" "pollIntervalSeconds" nil $cluster)) -}}
 {{- $controllerName := default $root.Values.kafka.ports.controller.name (dig "ports" "controller" "name" nil $cluster) -}}
 {{- $controllerPort := int (default $root.Values.kafka.ports.controller.containerPort (dig "ports" "controller" "containerPort" nil $cluster)) -}}
 {{- $controllerServicePort := int (default $root.Values.kafka.ports.controller.servicePort (dig "ports" "controller" "servicePort" nil $cluster)) -}}
@@ -176,6 +182,39 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      serviceAccountName: {{ include "kafka.serviceAccountName" $root }}
+      automountServiceAccountToken: {{ $root.Values.serviceAccount.automountServiceAccountToken }}
+      {{- if and $externalServicesEnabled $externalAutoDiscoveryEnabled }}
+      initContainers:
+        - name: external-address-discovery
+          image: "{{ $externalAutoDiscoveryImage }}:{{ $externalAutoDiscoveryTag }}"
+          imagePullPolicy: {{ $externalAutoDiscoveryPullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              ORDINAL="${HOSTNAME##*-}"
+              SERVICE_NAME="{{ $clusterName }}-${ORDINAL}-external"
+              NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
+              ATTEMPTS=$((({{ $externalAutoDiscoveryTimeout }} + {{ $externalAutoDiscoveryPollInterval }} - 1) / {{ $externalAutoDiscoveryPollInterval }}))
+              i=1
+              while [ "${i}" -le "${ATTEMPTS}" ]; do
+                EXTERNAL_HOST="$(kubectl -n "${NAMESPACE}" get svc "${SERVICE_NAME}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+                if [ -n "${EXTERNAL_HOST}" ]; then
+                  printf '%s' "${EXTERNAL_HOST}" > /broker-external/external-host
+                  echo "Discovered ${SERVICE_NAME} external address: ${EXTERNAL_HOST}"
+                  exit 0
+                fi
+                echo "Waiting for ${SERVICE_NAME} LoadBalancer external address"
+                i=$((i + 1))
+                sleep {{ $externalAutoDiscoveryPollInterval }}
+              done
+              echo "Timed out waiting for ${SERVICE_NAME} LoadBalancer external address" >&2
+              exit 1
+          volumeMounts:
+            - name: broker-external
+              mountPath: /broker-external
+      {{- end }}
       containers:
         - name: kafka
           image: "{{ $image }}:{{ $tag }}"
@@ -194,12 +233,20 @@ spec:
               export KAFKA_CONTROLLER_LISTENER_NAMES="CONTROLLER"
               export KAFKA_LISTENER_SECURITY_PROTOCOL_MAP="{{ default $root.Values.kafka.listenerSecurityProtocolMap $cluster.listenerSecurityProtocolMap }}{{- if $externalServicesEnabled }},{{ $externalListenerName }}:SASL_PLAINTEXT{{- end }}"
               {{- if $externalServicesEnabled }}
+              {{- if $externalAutoDiscoveryEnabled }}
+              EXTERNAL_HOST="$(cat /broker-external/external-host 2>/dev/null || true)"
+              if [ -z "${EXTERNAL_HOST}" ]; then
+                echo "Missing discovered external address for ${HOSTNAME}" >&2
+                exit 1
+              fi
+              {{- else }}
               EXTERNAL_ADVERTISED_HOSTS="{{ join "," $externalAdvertisedHosts }}"
               EXTERNAL_HOST="$(echo "${EXTERNAL_ADVERTISED_HOSTS}" | cut -d, -f$((ORDINAL + 1)))"
               if [ -z "${EXTERNAL_HOST}" ]; then
                 echo "Missing kafka.externalBrokerServices.advertisedHosts entry for ${HOSTNAME}" >&2
                 exit 1
               fi
+              {{- end }}
               {{- end }}
               export KAFKA_LISTENERS="SASL_PLAINTEXT://0.0.0.0:{{ $clientPort }}{{- if $externalServicesEnabled }},{{ $externalListenerName }}://0.0.0.0:{{ $externalContainerPort }}{{- end }},CONTROLLER://${POD_FQDN}:{{ $controllerPort }}"
               export KAFKA_ADVERTISED_LISTENERS="SASL_PLAINTEXT://${POD_FQDN}:{{ $clientPort }}{{- if $externalServicesEnabled }},{{ $externalListenerName }}://${EXTERNAL_HOST}:{{ $externalServicePort }}{{- end }}"
@@ -281,6 +328,10 @@ spec:
             {{- with (concat (default list $root.Values.kafka.extraVolumeMounts) (default list $cluster.extraVolumeMounts)) }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+            {{- if and $externalServicesEnabled $externalAutoDiscoveryEnabled }}
+            - name: broker-external
+              mountPath: /broker-external
+            {{- end }}
           {{- with (default $root.Values.kafka.containerSecurityContext $cluster.containerSecurityContext) }}
           securityContext:
             {{- toYaml . | nindent 12 }}
@@ -302,6 +353,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes:
+        {{- if and $externalServicesEnabled $externalAutoDiscoveryEnabled }}
+        - name: broker-external
+          emptyDir: {}
+        {{- end }}
         {{- if not (default $root.Values.kafka.persistence.enabled (dig "persistence" "enabled" nil $cluster)) }}
         - name: data
           emptyDir:
