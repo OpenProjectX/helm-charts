@@ -87,6 +87,18 @@ kafka:
     nameOverride: ""
     type: ClusterIP
     annotations: {}
+  externalBrokerServices:
+    enabled: false
+    type: LoadBalancer
+    annotations: {}
+    externalTrafficPolicy: ""
+    loadBalancerSourceRanges: []
+    loadBalancerIPs: []
+    advertisedHosts: []
+    servicePort: 9092
+    containerPort: 19092
+    protocol: TCP
+    listenerName: EXTERNAL
   headlessService:
     nameOverride: ""
     annotations: {}

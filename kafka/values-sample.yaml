@@ -29,6 +29,18 @@ kafka:
     - name: standby
       clusterId: zlFiTJelTOuhnklFwLWixw
       replicaCount: 2
+  externalBrokerServices:
+    enabled: true
+    type: LoadBalancer
+#    annotations: {}
+#    externalTrafficPolicy: ""
+#    loadBalancerSourceRanges: []
+#    loadBalancerIPs: []
+#    advertisedHosts: []
+#    servicePort: 9092
+#    containerPort: 19092
+#    protocol: TCP
+#    listenerName: EXTERNAL
 
 schemaRegistry:
   enabled: true

@@ -15,6 +15,17 @@
 {{- $clientPort := int (default $root.Values.kafka.ports.client.containerPort (dig "ports" "client" "containerPort" nil $cluster)) -}}
 {{- $clientServicePort := int (default $root.Values.kafka.ports.client.servicePort (dig "ports" "client" "servicePort" nil $cluster)) -}}
 {{- $clientProtocol := default $root.Values.kafka.ports.client.protocol (dig "ports" "client" "protocol" nil $cluster) -}}
+{{- $externalServicesEnabled := default $root.Values.kafka.externalBrokerServices.enabled (dig "externalBrokerServices" "enabled" nil $cluster) -}}
+{{- $externalServiceType := default $root.Values.kafka.externalBrokerServices.type (dig "externalBrokerServices" "type" nil $cluster) -}}
+{{- $externalListenerName := default $root.Values.kafka.externalBrokerServices.listenerName (dig "externalBrokerServices" "listenerName" nil $cluster) -}}
+{{- $externalContainerPort := int (default $root.Values.kafka.externalBrokerServices.containerPort (dig "externalBrokerServices" "containerPort" nil $cluster)) -}}
+{{- $externalServicePort := int (default $root.Values.kafka.externalBrokerServices.servicePort (dig "externalBrokerServices" "servicePort" nil $cluster)) -}}
+{{- $externalProtocol := default $root.Values.kafka.externalBrokerServices.protocol (dig "externalBrokerServices" "protocol" nil $cluster) -}}
+{{- $externalAnnotations := default $root.Values.kafka.externalBrokerServices.annotations (dig "externalBrokerServices" "annotations" nil $cluster) -}}
+{{- $externalTrafficPolicy := default $root.Values.kafka.externalBrokerServices.externalTrafficPolicy (dig "externalBrokerServices" "externalTrafficPolicy" nil $cluster) -}}
+{{- $externalSourceRanges := default $root.Values.kafka.externalBrokerServices.loadBalancerSourceRanges (dig "externalBrokerServices" "loadBalancerSourceRanges" nil $cluster) -}}
+{{- $externalLBIPs := default $root.Values.kafka.externalBrokerServices.loadBalancerIPs (dig "externalBrokerServices" "loadBalancerIPs" nil $cluster) -}}
+{{- $externalAdvertisedHosts := default $root.Values.kafka.externalBrokerServices.advertisedHosts (dig "externalBrokerServices" "advertisedHosts" nil $cluster) -}}
 {{- $controllerName := default $root.Values.kafka.ports.controller.name (dig "ports" "controller" "name" nil $cluster) -}}
 {{- $controllerPort := int (default $root.Values.kafka.ports.controller.containerPort (dig "ports" "controller" "containerPort" nil $cluster)) -}}
 {{- $controllerServicePort := int (default $root.Values.kafka.ports.controller.servicePort (dig "ports" "controller" "servicePort" nil $cluster)) -}}
@@ -80,6 +91,46 @@ spec:
       port: {{ $jmxServicePort }}
       targetPort: {{ $jmxName }}
       protocol: {{ $jmxProtocol }}
+{{- if $externalServicesEnabled }}
+{{- range $i := until $replicas }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-%d-external" $clusterName $i | trunc 63 | trimSuffix "-" }}
+  labels:
+    {{- include "kafka.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: broker
+    app.kubernetes.io/part-of: {{ $clusterLabel }}
+    statefulset.kubernetes.io/pod-name: {{ printf "%s-%d" $clusterName $i }}
+  {{- with $externalAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $externalServiceType }}
+  {{- with $externalTrafficPolicy }}
+  externalTrafficPolicy: {{ . }}
+  {{- end }}
+  {{- with $externalSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if lt $i (len $externalLBIPs) }}
+  loadBalancerIP: {{ index $externalLBIPs $i | quote }}
+  {{- end }}
+  selector:
+    {{- include "kafka.selectorLabels" $root | nindent 4 }}
+    app.kubernetes.io/component: broker
+    app.kubernetes.io/part-of: {{ $clusterLabel }}
+    statefulset.kubernetes.io/pod-name: {{ printf "%s-%d" $clusterName $i }}
+  ports:
+    - name: {{ lower $externalListenerName | trunc 15 | trimSuffix "-" }}
+      port: {{ $externalServicePort }}
+      targetPort: {{ lower $externalListenerName | trunc 15 | trimSuffix "-" }}
+      protocol: {{ $externalProtocol }}
+{{- end }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -141,9 +192,17 @@ spec:
               export KAFKA_PROCESS_ROLES="{{ default $root.Values.kafka.processRoles $cluster.processRoles }}"
               export KAFKA_CONTROLLER_QUORUM_VOTERS="{{ include "kafka.cluster.controllerQuorum" $ctx }}"
               export KAFKA_CONTROLLER_LISTENER_NAMES="CONTROLLER"
-              export KAFKA_LISTENER_SECURITY_PROTOCOL_MAP="{{ default $root.Values.kafka.listenerSecurityProtocolMap $cluster.listenerSecurityProtocolMap }}"
-              export KAFKA_LISTENERS="SASL_PLAINTEXT://0.0.0.0:{{ $clientPort }},CONTROLLER://${POD_FQDN}:{{ $controllerPort }}"
-              export KAFKA_ADVERTISED_LISTENERS="SASL_PLAINTEXT://${POD_FQDN}:{{ $clientPort }}"
+              export KAFKA_LISTENER_SECURITY_PROTOCOL_MAP="{{ default $root.Values.kafka.listenerSecurityProtocolMap $cluster.listenerSecurityProtocolMap }}{{- if $externalServicesEnabled }},{{ $externalListenerName }}:SASL_PLAINTEXT{{- end }}"
+              {{- if $externalServicesEnabled }}
+              EXTERNAL_ADVERTISED_HOSTS="{{ join "," $externalAdvertisedHosts }}"
+              EXTERNAL_HOST="$(echo "${EXTERNAL_ADVERTISED_HOSTS}" | cut -d, -f$((ORDINAL + 1)))"
+              if [ -z "${EXTERNAL_HOST}" ]; then
+                echo "Missing kafka.externalBrokerServices.advertisedHosts entry for ${HOSTNAME}" >&2
+                exit 1
+              fi
+              {{- end }}
+              export KAFKA_LISTENERS="SASL_PLAINTEXT://0.0.0.0:{{ $clientPort }}{{- if $externalServicesEnabled }},{{ $externalListenerName }}://0.0.0.0:{{ $externalContainerPort }}{{- end }},CONTROLLER://${POD_FQDN}:{{ $controllerPort }}"
+              export KAFKA_ADVERTISED_LISTENERS="SASL_PLAINTEXT://${POD_FQDN}:{{ $clientPort }}{{- if $externalServicesEnabled }},{{ $externalListenerName }}://${EXTERNAL_HOST}:{{ $externalServicePort }}{{- end }}"
               export KAFKA_INTER_BROKER_LISTENER_NAME="{{ default $root.Values.kafka.interBrokerListenerName $cluster.interBrokerListenerName }}"
               export KAFKA_SASL_ENABLED_MECHANISMS="{{ default $root.Values.kafka.saslEnabledMechanisms $cluster.saslEnabledMechanisms }}"
               export KAFKA_SASL_MECHANISM_INTER_BROKER_PROTOCOL="{{ default $root.Values.kafka.saslMechanismInterBrokerProtocol $cluster.saslMechanismInterBrokerProtocol }}"
@@ -190,6 +249,11 @@ spec:
             - name: {{ $jmxName }}
               containerPort: {{ $jmxPort }}
               protocol: {{ $jmxProtocol }}
+            {{- if $externalServicesEnabled }}
+            - name: {{ lower $externalListenerName | trunc 15 | trimSuffix "-" }}
+              containerPort: {{ $externalContainerPort }}
+              protocol: {{ $externalProtocol }}
+            {{- end }}
           env:
             - name: KAFKA_SUPER_USERS
               value: {{ join ";" (default $root.Values.kafka.superUsers $cluster.superUsers) | quote }}

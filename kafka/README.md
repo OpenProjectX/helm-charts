@@ -43,6 +43,40 @@ kafka:
 
 With persistence disabled, the broker data path is still mounted, but it uses `emptyDir` and is lost when the pod is deleted.
 
+## Per-broker LoadBalancer services
+
+Kafka external access needs one stable address per broker. Enable per-broker LoadBalancer Services and make each broker advertise the matching external IP or DNS name:
+
+```yaml
+kafka:
+  externalBrokerServices:
+    enabled: true
+    advertisedHosts:
+      - 203.0.113.10
+      - 203.0.113.11
+```
+
+For multi-cluster mode, configure the list per cluster:
+
+```yaml
+kafka:
+  clusters:
+    - name: primary
+      clusterId: MkU3OEVBNTcwNTJENDM2Qk
+      externalBrokerServices:
+        advertisedHosts:
+          - 203.0.113.10
+          - 203.0.113.11
+    - name: standby
+      clusterId: zlFiTJelTOuhnklFwLWixw
+      externalBrokerServices:
+        advertisedHosts:
+          - 203.0.113.12
+          - 203.0.113.13
+```
+
+If your cloud provider assigns IPs dynamically, install once with external services enabled, read the assigned addresses, put those addresses into `advertisedHosts`, then run `helm upgrade`. For production, prefer reserving static IPs and setting `loadBalancerIPs` plus matching `advertisedHosts` up front when your provider supports `loadBalancerIP`.
+
 ## User-managed SASL secrets
 
 For SASL/PLAIN, keep credentials in Kubernetes Secrets and point the chart at those secrets instead of putting JAAS strings in values files.

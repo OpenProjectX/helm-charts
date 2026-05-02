@@ -1,13 +1,74 @@
 Kafka has been installed as {{ include "kafka.fullname" . }}.
 
-Bootstrap service:
-  {{ include "kafka.serviceName" . }}:{{ .Values.kafka.ports.client.servicePort }}
-
-Broker DNS names:
-{{- $fullname := include "kafka.fullname" . }}
-{{- $headless := include "kafka.headlessServiceName" . }}
+{{- $root := . }}
 {{- $namespace := include "kafka.namespace" . }}
-{{- $domain := include "kafka.clusterDomain" . }}
-{{- range $i := until (int .Values.kafka.replicaCount) }}
-  {{ $fullname }}-{{ $i }}.{{ $headless }}.{{ $namespace }}.svc.{{ $domain }}:{{ $.Values.kafka.ports.client.servicePort }}
+{{- $clusters := include "kafka.effectiveClusters" . | fromYamlArray }}
+
+Internal bootstrap endpoints:
+{{- range $cluster := $clusters }}
+{{- $ctx := dict "root" $root "cluster" $cluster }}
+{{- $clusterName := default "default" $cluster.name }}
+  {{ $clusterName }}:
+    {{ include "kafka.cluster.bootstrapServers" $ctx }}
+{{- end }}
+
+{{- $globalExternal := .Values.kafka.externalBrokerServices.enabled }}
+{{- $hasExternal := false }}
+{{- range $cluster := $clusters }}
+{{- if (default $globalExternal (dig "externalBrokerServices" "enabled" nil $cluster)) }}
+{{- $hasExternal = true }}
+{{- end }}
+{{- end }}
+
+{{- if $hasExternal }}
+
+External broker LoadBalancer services:
+{{- range $cluster := $clusters }}
+{{- $ctx := dict "root" $root "cluster" $cluster }}
+{{- $clusterFullname := include "kafka.cluster.fullname" $ctx }}
+{{- $clusterName := default "default" $cluster.name }}
+{{- $replicas := int (default $root.Values.kafka.replicaCount $cluster.replicaCount) }}
+{{- if (default $globalExternal (dig "externalBrokerServices" "enabled" nil $cluster)) }}
+  {{ $clusterName }}:
+{{- range $i := until $replicas }}
+    {{ printf "%s-%d-external" $clusterFullname $i | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+Check assigned LoadBalancer IPs/hostnames:
+  kubectl -n {{ $namespace }} get svc -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=broker -o wide
+
+If your LoadBalancer IPs were assigned dynamically, copy this upgrade command after the
+external services show an EXTERNAL-IP/hostname. It updates Kafka advertised.listeners
+to match the assigned per-broker addresses.
+
+{{- if .Values.kafka.clusters }}
+  helm upgrade {{ .Release.Name }} ./kafka -n {{ $namespace }} -f <your-values.yaml> \
+{{- range $clusterIndex, $cluster := $clusters }}
+{{- $ctx := dict "root" $root "cluster" $cluster }}
+{{- $clusterFullname := include "kafka.cluster.fullname" $ctx }}
+{{- $replicas := int (default $root.Values.kafka.replicaCount $cluster.replicaCount) }}
+{{- if (default $globalExternal (dig "externalBrokerServices" "enabled" nil $cluster)) }}
+{{- range $i := until $replicas }}
+    --set-string 'kafka.clusters[{{ $clusterIndex }}].externalBrokerServices.advertisedHosts[{{ $i }}]'="$(kubectl -n {{ $namespace }} get svc {{ printf "%s-%d-external" $clusterFullname $i | trunc 63 | trimSuffix "-" }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}{.status.loadBalancer.ingress[0].hostname}')" \
+{{- end }}
+{{- end }}
+{{- end }}
+    --reuse-values
+{{- else }}
+{{- $cluster := first $clusters }}
+{{- $ctx := dict "root" $root "cluster" $cluster }}
+{{- $clusterFullname := include "kafka.cluster.fullname" $ctx }}
+{{- $replicas := int (default $root.Values.kafka.replicaCount $cluster.replicaCount) }}
+  helm upgrade {{ .Release.Name }} ./kafka -n {{ $namespace }} -f <your-values.yaml> \
+{{- range $i := until $replicas }}
+    --set-string 'kafka.externalBrokerServices.advertisedHosts[{{ $i }}]'="$(kubectl -n {{ $namespace }} get svc {{ printf "%s-%d-external" $clusterFullname $i | trunc 63 | trimSuffix "-" }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}{.status.loadBalancer.ingress[0].hostname}')" \
+{{- end }}
+    --reuse-values
+{{- end }}
+
+For production, prefer reserving static LoadBalancer IPs and setting both
+externalBrokerServices.loadBalancerIPs and externalBrokerServices.advertisedHosts
+before the first install.
 {{- end }}
