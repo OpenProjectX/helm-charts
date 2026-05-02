@@ -1,0 +1,146 @@
+kerberos:
+  enabled: false
+  kdc:
+    enabled: false
+
+kafka:
+  persistence:
+    enabled: false
+
+  saslEnabledMechanisms: PLAIN
+  saslMechanismInterBrokerProtocol: PLAIN
+  saslKerberosServiceName: ""
+  superUsers:
+    - User:admin
+    - User:kafbat-ui
+    - User:schema-registry
+    - User:mm2
+
+  jaas:
+    enabled: true
+    existingSecret: kafka-auth
+    existingSecretKey: kafka-server-jaas.conf
+
+  clusters:
+    - name: primary
+      clusterId: MkU3OEVBNTcwNTJENDM2Qk
+      replicaCount: 2
+
+    - name: standby
+      clusterId: zlFiTJelTOuhnklFwLWixw
+      replicaCount: 2
+  externalBrokerServices:
+    enabled: true
+    type: LoadBalancer
+#    annotations: {}
+#    externalTrafficPolicy: ""
+#    loadBalancerSourceRanges: []
+#    loadBalancerIPs: []
+#    advertisedHosts: []
+#    servicePort: 9092
+#    containerPort: 19092
+#    protocol: TCP
+#    listenerName: EXTERNAL
+
+schemaRegistry:
+  enabled: true
+  kafkaCluster: primary
+  kerberos:
+    enabled: false
+  env:
+    SCHEMA_REGISTRY_KAFKASTORE_SECURITY_PROTOCOL: SASL_PLAINTEXT
+    SCHEMA_REGISTRY_KAFKASTORE_SASL_MECHANISM: PLAIN
+  extraEnv:
+    - name: SCHEMA_REGISTRY_KAFKASTORE_SASL_JAAS_CONFIG
+      valueFrom:
+        secretKeyRef:
+          name: kafka-auth
+          key: schema-registry-jaas.conf
+
+kafbatUi:
+  image:
+    repository: ghcr.io/openprojectx/kafka-ui
+    tag: latest
+    pullPolicy: Always
+  enabled: true
+  autoClusters: true
+  clusters: []
+  kerberos:
+    enabled: false
+  env:
+    KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: SASL_PLAINTEXT
+    KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM: PLAIN
+    KAFKA_CLUSTERS_1_PROPERTIES_SECURITY_PROTOCOL: SASL_PLAINTEXT
+    KAFKA_CLUSTERS_1_PROPERTIES_SASL_MECHANISM: PLAIN
+  extraEnv:
+    - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG
+      valueFrom:
+        secretKeyRef:
+          name: kafka-auth
+          key: kafbat-ui-jaas.conf
+    - name: KAFKA_CLUSTERS_1_PROPERTIES_SASL_JAAS_CONFIG
+      valueFrom:
+        secretKeyRef:
+          name: kafka-auth
+          key: kafbat-ui-jaas.conf
+
+topicInit:
+  enabled: true
+  kafkaCluster: primary
+  commandConfigSecretExistingSecret: kafka-auth
+  commandConfigSecretExistingSecretKey: client-secret.properties
+  commandConfig: |
+    security.protocol=SASL_PLAINTEXT
+    sasl.mechanism=PLAIN
+
+mirrorMaker:
+  enabled: true
+  secretPropertiesExistingSecret: kafka-mm2
+  secretPropertiesExistingSecretKey: mm2-secret.properties
+  properties: |
+    clusters = primary, standby
+
+    primary.bootstrap.servers = kafka-kafka-primary-0.kafka-kafka-primary-headless.kafka.svc.cluster.local:9092,kafka-kafka-primary-1.kafka-kafka-primary-headless.kafka.svc.cluster.local:9092
+    standby.bootstrap.servers = kafka-kafka-standby-0.kafka-kafka-standby-headless.kafka.svc.cluster.local:9092,kafka-kafka-standby-1.kafka-kafka-standby-headless.kafka.svc.cluster.local:9092
+
+    primary.security.protocol = SASL_PLAINTEXT
+    primary.sasl.mechanism = PLAIN
+    standby.security.protocol = SASL_PLAINTEXT
+    standby.sasl.mechanism = PLAIN
+
+    primary->standby.enabled = true
+    primary->standby.topics = .*
+    replication.policy.class = org.apache.kafka.connect.mirror.IdentityReplicationPolicy
+    refresh.topics.interval.seconds = 10
+    sync.topic.configs.interval.seconds = 10
+
+    standby->primary.enabled = false
+    standby->primary.topics = $^
+    standby->primary.emit.heartbeats.enabled = false
+    standby->primary.emit.checkpoints.enabled = false
+    standby->primary.sync.group.offsets.enabled = false
+
+    primary->standby.emit.checkpoints.enabled = false
+    primary->standby.sync.group.offsets.enabled = false
+
+    offset.storage.replication.factor = 1
+    config.storage.replication.factor = 1
+    status.storage.replication.factor = 1
+
+    replication.factor = 1
+    checkpoints.topic.replication.factor = 1
+    heartbeats.topic.replication.factor = 1
+    offset-syncs.topic.replication.factor = 1
+
+istio:
+  enabled: true
+  parentRefs:
+    - name: k8s-infra-gateway
+      namespace: istio-ingress
+
+  httpRoutes:
+    ui:
+      enabled: true
+      hostnames:
+        -  ui.kafka.gke-hk.k8s.openprojectx.org
+      port: 8080
