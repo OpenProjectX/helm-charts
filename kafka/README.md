@@ -93,6 +93,24 @@ kafka:
 
 For production, static LoadBalancer IPs are still preferable when your provider supports them. Set `loadBalancerIPs` to reserve/request the service addresses. You can keep auto discovery enabled so brokers still read the actual assigned addresses at startup.
 
+## Separate network chart
+
+If LoadBalancer IP stability and gateway lifecycle should be managed separately from broker pods, use the `kafka-network` chart for per-broker LoadBalancer Services and Gateway/Istio resources. In the Kafka workload chart, keep the external listener enabled but stop rendering the LoadBalancer Services:
+
+```yaml
+kafka:
+  externalBrokerServices:
+    enabled: true
+    create: false
+    autoDiscovery:
+      enabled: true
+
+istio:
+  enabled: false
+```
+
+Then put the stable LoadBalancer IPs, Gateway API routes, and Istio resources in the `kafka-network` release. Existing LoadBalancer Services already owned by the `kafka` release cannot be installed by `kafka-network` with the same names until they are migrated or recreated. For stable production IPs, reserve the IPs in the cloud provider first and set them as `kafka-network.kafka.clusters[].externalBrokerServices.loadBalancerIPs`.
+
 ## User-managed SASL secrets
 
 For SASL/PLAIN, keep credentials in Kubernetes Secrets and point the chart at those secrets instead of putting JAAS strings in values files.

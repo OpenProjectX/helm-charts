@@ -1,0 +1,59 @@
+{{- if .Values.kafka.externalBrokerServices.enabled }}
+{{- $root := . -}}
+{{- $kafkaName := include "kafka-network.kafkaName" . -}}
+{{- $namespace := include "kafka-network.namespace" . -}}
+{{- $external := .Values.kafka.externalBrokerServices -}}
+{{- $globalLBIPs := default list $external.loadBalancerIPs -}}
+{{- range $cluster := .Values.kafka.clusters }}
+{{- $ctx := dict "root" $root "cluster" $cluster -}}
+{{- $clusterFullname := include "kafka-network.kafkaClusterFullname" $ctx -}}
+{{- $clusterLabel := include "kafka-network.kafkaClusterLabel" $ctx -}}
+{{- $replicas := int (default 2 $cluster.replicaCount) -}}
+{{- $clusterExternal := default dict $cluster.externalBrokerServices -}}
+{{- $annotations := default $external.annotations $clusterExternal.annotations -}}
+{{- $externalTrafficPolicy := default $external.externalTrafficPolicy $clusterExternal.externalTrafficPolicy -}}
+{{- $sourceRanges := default $external.loadBalancerSourceRanges $clusterExternal.loadBalancerSourceRanges -}}
+{{- $lbIPs := default $globalLBIPs $clusterExternal.loadBalancerIPs -}}
+{{- range $i := until $replicas }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-%d-external" $clusterFullname $i | trunc 63 | trimSuffix "-" }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "kafka-network.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: broker
+    app.kubernetes.io/part-of: {{ $clusterLabel }}
+    app.kubernetes.io/target-instance: {{ $root.Values.kafka.releaseName }}
+    statefulset.kubernetes.io/pod-name: {{ printf "%s-%d" $clusterFullname $i }}
+  {{- with $annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ default "LoadBalancer" $external.type }}
+  {{- with $externalTrafficPolicy }}
+  externalTrafficPolicy: {{ . }}
+  {{- end }}
+  {{- with $sourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if lt $i (len $lbIPs) }}
+  loadBalancerIP: {{ index $lbIPs $i | quote }}
+  {{- end }}
+  selector:
+    app.kubernetes.io/name: {{ $kafkaName }}
+    app.kubernetes.io/instance: {{ $root.Values.kafka.releaseName }}
+    app.kubernetes.io/component: broker
+    app.kubernetes.io/part-of: {{ $clusterLabel }}
+    statefulset.kubernetes.io/pod-name: {{ printf "%s-%d" $clusterFullname $i }}
+  ports:
+    - name: external
+      port: {{ default $external.servicePort $clusterExternal.servicePort }}
+      targetPort: {{ default $external.targetPort $clusterExternal.targetPort }}
+      protocol: {{ default $external.protocol $clusterExternal.protocol }}
+{{- end }}
+{{- end }}
+{{- end }}

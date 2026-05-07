@@ -1,0 +1,22 @@
+Kafka network resources target Kafka release {{ .Values.kafka.releaseName }}.
+
+Per-broker LoadBalancer services:
+{{- $root := . }}
+{{- range $cluster := .Values.kafka.clusters }}
+{{- $ctx := dict "root" $root "cluster" $cluster }}
+{{- $clusterFullname := include "kafka-network.kafkaClusterFullname" $ctx }}
+  {{ default "default" $cluster.name }}:
+{{- range $i := until (int (default 2 $cluster.replicaCount)) }}
+    {{ printf "%s-%d-external" $clusterFullname $i | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+
+Check addresses:
+  kubectl -n {{ include "kafka-network.namespace" . }} get svc -l app.kubernetes.io/target-instance={{ .Values.kafka.releaseName }},app.kubernetes.io/component=broker -o wide
+
+Kafka chart should have:
+  kafka.externalBrokerServices.enabled=true
+  kafka.externalBrokerServices.create=false
+
+For dynamic addresses, keep kafka.externalBrokerServices.autoDiscovery.enabled=true.
+For fully static addresses, set the same stable IPs/DNS names as advertisedHosts in the Kafka chart.

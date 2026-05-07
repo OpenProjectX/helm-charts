@@ -1,0 +1,68 @@
+kafka:
+  releaseName: kafka
+  chartName: kafka
+  clusters:
+    - name: primary
+      replicaCount: 2
+      externalBrokerServices:
+        loadBalancerIPs: []
+        # - 203.0.113.10
+        # - 203.0.113.11
+    - name: standby
+      replicaCount: 2
+      externalBrokerServices:
+        loadBalancerIPs: []
+        # - 203.0.113.12
+        # - 203.0.113.13
+
+gateway:
+  enabled: false
+  parentRefs:
+    - name: k8s-infra-gateway
+      namespace: istio-ingress
+  httpRoutes:
+    ui:
+      enabled: true
+      hostnames:
+        - ui.kafka.gke-hk.k8s.openprojectx.org
+      port: 8080
+    schemaRegistry:
+      enabled: false
+      hostnames: []
+      port: 8085
+
+istio:
+  enabled: true
+  namespace: kafka
+  virtualServices:
+    enabled: true
+    apiVersion: networking.istio.io/v1
+    services:
+      - name: kafka-kafka-ui
+        hosts:
+          - ui.kafka.gke-hk.k8s.openprojectx.org
+        gateways:
+          - istio-ingress/k8s-infra-gateway
+        http:
+          - match:
+              - uri:
+                  prefix: /
+            route:
+              - destination:
+                  host: kafka-kafka-ui.kafka.svc.cluster.local
+                  port:
+                    number: 8080
+      - name: kafka-kafka-schema-registry
+        hosts:
+          - schema-registry.kafka.gke-hk.k8s.openprojectx.org
+        gateways:
+          - istio-ingress/k8s-infra-gateway
+        http:
+          - match:
+              - uri:
+                  prefix: /
+            route:
+              - destination:
+                  host: kafka-kafka-schema-registry.kafka.svc.cluster.local
+                  port:
+                    number: 8085

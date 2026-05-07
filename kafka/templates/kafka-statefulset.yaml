@@ -16,6 +16,7 @@
 {{- $clientServicePort := int (default $root.Values.kafka.ports.client.servicePort (dig "ports" "client" "servicePort" nil $cluster)) -}}
 {{- $clientProtocol := default $root.Values.kafka.ports.client.protocol (dig "ports" "client" "protocol" nil $cluster) -}}
 {{- $externalServicesEnabled := default $root.Values.kafka.externalBrokerServices.enabled (dig "externalBrokerServices" "enabled" nil $cluster) -}}
+{{- $externalServicesCreate := default $root.Values.kafka.externalBrokerServices.create (dig "externalBrokerServices" "create" nil $cluster) -}}
 {{- $externalServiceType := default $root.Values.kafka.externalBrokerServices.type (dig "externalBrokerServices" "type" nil $cluster) -}}
 {{- $externalListenerName := default $root.Values.kafka.externalBrokerServices.listenerName (dig "externalBrokerServices" "listenerName" nil $cluster) -}}
 {{- $externalContainerPort := int (default $root.Values.kafka.externalBrokerServices.containerPort (dig "externalBrokerServices" "containerPort" nil $cluster)) -}}
@@ -97,7 +98,7 @@ spec:
       port: {{ $jmxServicePort }}
       targetPort: {{ $jmxName }}
       protocol: {{ $jmxProtocol }}
-{{- if $externalServicesEnabled }}
+{{- if and $externalServicesEnabled $externalServicesCreate }}
 {{- range $i := until $replicas }}
 ---
 apiVersion: v1

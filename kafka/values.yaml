@@ -98,6 +98,9 @@ kafka:
     annotations: {}
   externalBrokerServices:
     enabled: false
+    # Keep enabled=true for Kafka external listener config. Set create=false when
+    # a separate network chart owns the per-broker LoadBalancer Services.
+    create: true
     type: LoadBalancer
     annotations: {}
     externalTrafficPolicy: ""

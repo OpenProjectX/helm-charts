@@ -31,6 +31,7 @@ kafka:
       replicaCount: 2
   externalBrokerServices:
     enabled: true
+    create: false
     type: LoadBalancer
 #    annotations: {}
 #    externalTrafficPolicy: ""
@@ -133,7 +134,7 @@ mirrorMaker:
     offset-syncs.topic.replication.factor = 1
 
 istio:
-  enabled: true
+  enabled: false
   parentRefs:
     - name: k8s-infra-gateway
       namespace: istio-ingress

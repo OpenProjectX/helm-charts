@@ -1,0 +1,85 @@
+{{- if .Values.gateway.enabled }}
+{{- $root := . -}}
+{{- $namespace := default (include "kafka-network.namespace" .) .Values.gateway.namespace -}}
+{{- $parentRefs := .Values.gateway.parentRefs -}}
+{{- range $name, $route := .Values.gateway.httpRoutes }}
+{{- if $route.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ default (printf "%s-%s" (include "kafka-network.kafkaFullname" $root) (kebabcase $name)) $route.nameOverride }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "kafka-network.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ kebabcase $name }}
+    {{- with $.Values.gateway.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $.Values.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml $parentRefs | nindent 4 }}
+  {{- with $route.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ default "/" $route.pathPrefix | quote }}
+      {{- with $route.filters }}
+      filters:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      backendRefs:
+        - name: {{ default (include "kafka-network.kafkaServiceName" (dict "Values" $root.Values "Chart" $root.Chart "Release" $root.Release "component" $name)) $route.serviceName }}
+          port: {{ $route.port }}
+    {{- with $route.additionalRules }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- with .Values.gateway.tcpRoutes.kafka }}
+{{- if .enabled }}
+---
+apiVersion: {{ .apiVersion }}
+kind: TCPRoute
+metadata:
+  name: {{ default (printf "%s-kafka" (include "kafka-network.kafkaFullname" $root)) .nameOverride }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "kafka-network.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: kafka
+    {{- with $.Values.gateway.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $.Values.gateway.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml $parentRefs | nindent 4 }}
+  rules:
+    {{- range .rules }}
+    - {{- if .matches }}
+      matches:
+        {{- toYaml .matches | nindent 8 }}
+      {{- end }}
+      backendRefs:
+        {{- range .backendRefs }}
+        - name: {{ required "gateway.tcpRoutes.kafka.rules[].backendRefs[].name is required for kafka TCP routes" .name }}
+          port: {{ default 9092 .port }}
+          {{- with .weight }}
+          weight: {{ . }}
+          {{- end }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

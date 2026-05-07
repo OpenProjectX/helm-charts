@@ -1,0 +1,99 @@
+nameOverride: ""
+fullnameOverride: ""
+namespaceOverride: ""
+
+kafka:
+  # The Helm release/name values of the Kafka workload chart this network chart targets.
+  releaseName: kafka
+  chartName: kafka
+  fullnameOverride: ""
+  clusterDomain: cluster.local
+  clusters:
+    - name: primary
+      replicaCount: 2
+    - name: standby
+      replicaCount: 2
+  ports:
+    client:
+      servicePort: 9092
+    external:
+      servicePort: 9092
+      targetPort: external
+      protocol: TCP
+  externalBrokerServices:
+    enabled: true
+    type: LoadBalancer
+    annotations: {}
+    externalTrafficPolicy: ""
+    loadBalancerSourceRanges: []
+    # Stable provider-assigned addresses, one per broker, per cluster. Prefer
+    # reserving these addresses in the cloud provider and keeping them here.
+    loadBalancerIPs: []
+    # Optional DNS names or static IPs used only for NOTES output.
+    advertisedHosts: []
+    servicePort: 9092
+    targetPort: external
+    protocol: TCP
+
+gateway:
+  enabled: false
+  namespace: ""
+  labels: {}
+  annotations: {}
+  parentRefs:
+    - name: k8s-infra-gateway
+      namespace: istio-ingress
+  httpRoutes:
+    ui:
+      enabled: false
+      nameOverride: ""
+      hostnames: []
+      pathPrefix: /
+      serviceName: ""
+      port: 8080
+      filters: []
+      additionalRules: []
+    schemaRegistry:
+      enabled: false
+      nameOverride: ""
+      hostnames: []
+      pathPrefix: /
+      serviceName: ""
+      port: 8085
+      filters: []
+      additionalRules: []
+  tcpRoutes:
+    kafka:
+      enabled: false
+      apiVersion: gateway.networking.k8s.io/v1alpha2
+      nameOverride: ""
+      rules:
+        - backendRefs:
+            - name: ""
+              port: 9092
+
+istio:
+  enabled: false
+  namespace: ""
+  labels: {}
+  annotations: {}
+  virtualServices:
+    enabled: false
+    apiVersion: networking.istio.io/v1
+    services: []
+  destinationRules:
+    enabled: false
+    apiVersion: networking.istio.io/v1
+    rules: []
+  peerAuthentication:
+    enabled: false
+    apiVersion: security.istio.io/v1
+    nameOverride: ""
+    mtls:
+      mode: PERMISSIVE
+    portLevelMtls: {}
+    selector: {}
+  authorizationPolicies:
+    enabled: false
+    apiVersion: security.istio.io/v1
+    policies: []
