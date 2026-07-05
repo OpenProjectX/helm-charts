@@ -20,3 +20,10 @@ patch when not already cached; JDK 25 comes from the
 To use it, point the pod template's jnlp container at this image (k8s-infra:
 `jenkins.agent.longRunning` state values) — the `jdk17`/`jdk21` sidecar
 containers and the ci.yaml `container:` option are then no longer needed.
+
+For Testcontainers, the image starts an internal Docker daemon on
+`unix:///var/run/docker.sock` before launching the Jenkins inbound agent. The
+agent pod must run the container as root with `privileged: true`; otherwise
+`JENKINS_AGENT_DIND=true` is ignored and the Jenkins agent still starts
+without Docker-in-Docker. Set `JENKINS_AGENT_DIND=false` to disable the daemon
+explicitly.

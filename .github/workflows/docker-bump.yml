@@ -75,7 +75,7 @@ jobs:
       # Persist downloaded artifacts across runs.
       # Dockerfiles opt in by downloading through a
       #   RUN --mount=type=cache,target=/var/cache/downloads
-      # cache mount (no-op for Dockerfiles that don't).
+      # cache mount (Temurin, Node, Docker static tarballs, etc.).
       # --------------------------------------------
       - name: Cache downloaded artifacts
         id: artifact-cache
