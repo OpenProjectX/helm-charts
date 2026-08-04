@@ -8,6 +8,7 @@
 #   - Node.js 22 (default on PATH) and 24, switch with:
 #       export PATH="$NODE24_HOME/bin:$PATH"
 #   - Docker 29 daemon/CLI + Buildx for privileged Docker-in-Docker builds and Testcontainers tests
+#   - Helm 3 + kubectl for in-cluster Kubernetes deployments
 #
 # Gradle and Maven are intentionally NOT installed: repos bring their own
 # wrapper (./gradlew, ./mvnw), cached on the gradle-cache PVC.
@@ -17,6 +18,8 @@
 # docker-bump.yml). Files are fetched to *.part then renamed, so an
 # interrupted download never poisons the cache.
 ARG BUILDX_VERSION=0.35.0
+ARG HELM_VERSION=3.21.0
+ARG KUBECTL_VERSION=1.36.1
 
 FROM docker/buildx-bin:${BUILDX_VERSION} AS buildx
 
@@ -24,6 +27,8 @@ FROM jenkins/inbound-agent:trixie-jdk25
 
 ARG TARGETARCH=amd64
 ARG BUILDX_VERSION=0.35.0
+ARG HELM_VERSION=3.21.0
+ARG KUBECTL_VERSION=1.36.1
 ARG NODE22_VERSION=22.23.1
 ARG NODE24_VERSION=24.18.0
 ARG DOCKER_VERSION=29.6.1
@@ -148,6 +153,31 @@ COPY --from=buildx /buildx /usr/local/lib/docker/cli-plugins/docker-buildx
 RUN chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx; \
     docker buildx version
 
+# Helm and kubectl for Kubernetes deployment stages.
+RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
+    set -eux; \
+    case "${TARGETARCH}" in \
+        amd64) TOOL_ARCH=amd64 ;; \
+        arm64) TOOL_ARCH=arm64 ;; \
+        *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    helm_f="/var/cache/downloads/helm-v${HELM_VERSION}-linux-${TOOL_ARCH}.tar.gz"; \
+    if [ ! -s "$helm_f" ]; then \
+        curl -fsSL -o "$helm_f.part" "https://get.helm.sh/helm-v${HELM_VERSION}-linux-${TOOL_ARCH}.tar.gz"; \
+        mv "$helm_f.part" "$helm_f"; \
+    fi; \
+    tar -xzf "$helm_f" -C /tmp "linux-${TOOL_ARCH}/helm"; \
+    mv "/tmp/linux-${TOOL_ARCH}/helm" /usr/local/bin/helm; \
+    rm -rf "/tmp/linux-${TOOL_ARCH}"; \
+    kubectl_f="/var/cache/downloads/kubectl-v${KUBECTL_VERSION}-linux-${TOOL_ARCH}"; \
+    if [ ! -s "$kubectl_f" ]; then \
+        curl -fsSL -o "$kubectl_f.part" "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/${TOOL_ARCH}/kubectl"; \
+        mv "$kubectl_f.part" "$kubectl_f"; \
+    fi; \
+    install -m 0755 "$kubectl_f" /usr/local/bin/kubectl; \
+    helm version --client; \
+    kubectl version --client=true
+
 RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
     set -eux; \
     f="/var/cache/downloads/dind-${DIND_COMMIT}"; \
@@ -179,6 +209,8 @@ RUN set -eux; \
     git lfs version; \
     docker --version; \
     docker buildx version; \
-    dockerd --version
+    dockerd --version; \
+    helm version --client; \
+    kubectl version --client=true
 
 ENTRYPOINT ["jenkins-dind-entrypoint.sh"]
