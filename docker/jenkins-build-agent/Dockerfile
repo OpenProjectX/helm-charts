@@ -7,7 +7,7 @@
 #     finds them (projects with jvmToolchain(17|21) need no extra config)
 #   - Node.js 22 (default on PATH) and 24, switch with:
 #       export PATH="$NODE24_HOME/bin:$PATH"
-#   - Docker 29 daemon/CLI for privileged Docker-in-Docker Testcontainers tests
+#   - Docker 29 daemon/CLI + Buildx for privileged Docker-in-Docker builds and Testcontainers tests
 #
 # Gradle and Maven are intentionally NOT installed: repos bring their own
 # wrapper (./gradlew, ./mvnw), cached on the gradle-cache PVC.
@@ -16,9 +16,14 @@
 # them; in CI the mount is persisted across runs (see .github/workflows/
 # docker-bump.yml). Files are fetched to *.part then renamed, so an
 # interrupted download never poisons the cache.
+ARG BUILDX_VERSION=0.35.0
+
+FROM docker/buildx-bin:${BUILDX_VERSION} AS buildx
+
 FROM jenkins/inbound-agent:trixie-jdk25
 
 ARG TARGETARCH=amd64
+ARG BUILDX_VERSION=0.35.0
 ARG NODE22_VERSION=22.23.1
 ARG NODE24_VERSION=24.18.0
 ARG DOCKER_VERSION=29.6.1
@@ -139,6 +144,10 @@ RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
     runc --version; \
     docker-init --version
 
+COPY --from=buildx /buildx /usr/local/lib/docker/cli-plugins/docker-buildx
+RUN chmod +x /usr/local/lib/docker/cli-plugins/docker-buildx; \
+    docker buildx version
+
 RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
     set -eux; \
     f="/var/cache/downloads/dind-${DIND_COMMIT}"; \
@@ -169,6 +178,7 @@ RUN set -eux; \
     "${NODE24_HOME}/bin/node" --version; \
     git lfs version; \
     docker --version; \
+    docker buildx version; \
     dockerd --version
 
 ENTRYPOINT ["jenkins-dind-entrypoint.sh"]
