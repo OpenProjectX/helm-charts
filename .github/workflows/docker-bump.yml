@@ -25,9 +25,19 @@ jobs:
       # --------------------------------------------
       - name: Parse commit message
         id: parse
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          MSG="${{ github.event.head_commit.message }}"
+          MSG="$COMMIT_MESSAGE"
           DIR=$(echo "$MSG" | head -n1 | sed -E 's/^bump\(docker\):[[:space:]]*//')
+          if [[ ! "$DIR" =~ ^docker/[a-z0-9][a-z0-9._-]*$ ]]; then
+            echo "Invalid Docker directory: $DIR" >&2
+            exit 1
+          fi
+          if [ ! -f "$DIR/Dockerfile" ]; then
+            echo "Dockerfile not found: $DIR/Dockerfile" >&2
+            exit 1
+          fi
           IMAGE_NAME=$(basename "$DIR")
 
           echo "dir=$DIR" >> $GITHUB_OUTPUT
@@ -52,7 +62,8 @@ jobs:
 
           TAGS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             https://ghcr.io/v2/openprojectx/${{ steps.parse.outputs.image_name }}/tags/list \
-            | jq -r '.tags[]?' | sort -V)
+            | jq -r '.tags[]? | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
+            | sort -V)
 
           if [ -z "$TAGS" ]; then
             VERSION="0.1.0"
@@ -108,3 +119,12 @@ jobs:
             ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}:latest
           cache-from: type=registry,ref=ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}-cache:latest
           cache-to: type=registry,ref=ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}-cache:latest,mode=max
+
+      # The upstream Playwright image has browsers but no npm Playwright CLI.
+      # Verify our derived server image contains both and works without network.
+      - name: Verify offline Playwright server runtime
+        if: steps.parse.outputs.image_name == 'playwright-server'
+        run: |
+          IMAGE="ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}:${{ steps.version.outputs.version }}"
+          docker pull "$IMAGE"
+          bash docker/playwright-server/verify-offline.sh "$IMAGE"
