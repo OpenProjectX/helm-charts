@@ -13,6 +13,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    concurrency:
+      group: docker-bump-${{ github.event.head_commit.message }}
+      cancel-in-progress: false
 
     if: startsWith(github.event.head_commit.message, 'bump(docker):')
 
@@ -55,6 +58,8 @@ jobs:
       # --------------------------------------------
       - name: Determine next version
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           IMAGE="ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}"
           PKG_NAME="${{ steps.parse.outputs.image_name }}"
@@ -63,7 +68,7 @@ jobs:
 
           TAGS=$(gh api "/orgs/openprojectx/packages/container/${PKG_NAME}/versions?per_page=100" \
             --paginate \
-            --jq '[.[] | .metadata.container.tags[]?] | .[]' 2>/dev/null \
+            --jq '[.[] | .metadata.container.tags[]?] | .[]' \
             | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
             | sort -V || true)
 
