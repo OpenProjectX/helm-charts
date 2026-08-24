@@ -111,9 +111,12 @@ jobs:
       # --------------------------------------------
       - name: Build and push
         uses: docker/build-push-action@v6
+        env:
+          ACTIONS_STEP_DEBUG: true
         with:
           context: ${{ steps.parse.outputs.dir }}
           push: true
+          progress: plain
           tags: |
             ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}:${{ steps.version.outputs.version }}
             ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}:latest
