@@ -57,13 +57,15 @@ jobs:
         id: version
         run: |
           IMAGE="ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}"
+          PKG_NAME="${{ steps.parse.outputs.image_name }}"
 
           echo "Checking existing tags for $IMAGE"
 
-          TAGS=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            https://ghcr.io/v2/openprojectx/${{ steps.parse.outputs.image_name }}/tags/list \
-            | jq -r '.tags[]? | select(test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))' \
-            | sort -V)
+          TAGS=$(gh api "/orgs/openprojectx/packages/container/${PKG_NAME}/versions?per_page=100" \
+            --paginate \
+            --jq '[.[] | .metadata.container.tags[]?] | .[]' 2>/dev/null \
+            | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' \
+            | sort -V || true)
 
           if [ -z "$TAGS" ]; then
             VERSION="0.1.0"
@@ -74,6 +76,7 @@ jobs:
             VERSION="$MAJOR.$MINOR.$PATCH"
           fi
 
+          echo "Resolved version: $VERSION (latest existing: ${LATEST:-none})"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       # --------------------------------------------
@@ -116,7 +119,6 @@ jobs:
         with:
           context: ${{ steps.parse.outputs.dir }}
           push: true
-          progress: plain
           tags: |
             ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}:${{ steps.version.outputs.version }}
             ghcr.io/openprojectx/${{ steps.parse.outputs.image_name }}:latest
