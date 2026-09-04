@@ -7,6 +7,7 @@
 #     finds them (projects with jvmToolchain(17|21) need no extra config)
 #   - Node.js 22 (default on PATH) and 24, switch with:
 #       export PATH="$NODE24_HOME/bin:$PATH"
+#   - Bun 1.4 (default on PATH)
 #   - Docker 29 daemon/CLI + Buildx for privileged Docker-in-Docker builds and Testcontainers tests
 #   - Helm 3 + kubectl for in-cluster Kubernetes deployments
 #
@@ -31,6 +32,7 @@ ARG HELM_VERSION=3.21.0
 ARG KUBECTL_VERSION=1.36.1
 ARG NODE22_VERSION=22.23.1
 ARG NODE24_VERSION=24.18.0
+ARG BUN_VERSION=1.4.1
 ARG DOCKER_VERSION=29.6.1
 ARG DIND_COMMIT=8d9e3502aba39127e4d12196dae16d306f76993d
 
@@ -101,6 +103,27 @@ RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
 
 ENV NODE22_HOME=/opt/node-22 \
     NODE24_HOME=/opt/node-24
+
+# Bun (single binary; bunx is a symlink to bun). Global installs
+# (bun add -g) stay per-user in ~/.bun, so the agent runs unprivileged.
+RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
+    set -eux; \
+    case "${TARGETARCH}" in \
+        amd64) BUN_ARCH=x64 ;; \
+        arm64) BUN_ARCH=aarch64 ;; \
+        *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    f="/var/cache/downloads/bun-v${BUN_VERSION}-linux-${BUN_ARCH}.zip"; \
+    if [ ! -s "$f" ]; then \
+        curl -fsSL -o "$f.part" "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-${BUN_ARCH}.zip"; \
+        mv "$f.part" "$f"; \
+    fi; \
+    unzip -q "$f" -d /tmp/bun; \
+    mkdir -p /opt/bun/bin; \
+    install -m 0755 "/tmp/bun/bun-linux-${BUN_ARCH}/bun" /opt/bun/bin/bun; \
+    rm -rf /tmp/bun; \
+    ln -sf /opt/bun/bin/bun /usr/local/bin/bun; \
+    ln -sf /opt/bun/bin/bun /usr/local/bin/bunx
 
 # Docker CLI/daemon/runtime, adapted from the official docker:dind image.
 RUN set -eux; \
@@ -206,6 +229,7 @@ RUN set -eux; \
     "${JAVA21_HOME}/bin/java" -version; \
     node --version; npm --version; \
     "${NODE24_HOME}/bin/node" --version; \
+    bun --version; bunx --version; \
     git lfs version; \
     docker --version; \
     docker buildx version; \
