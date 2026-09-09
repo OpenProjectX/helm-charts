@@ -230,8 +230,8 @@ RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
         ln -sf "/opt/ansible/bin/${bin}" "/usr/local/bin/${bin}"; \
     done; \
     case "${TARGETARCH}" in \
-        amd64) GH_ARCH=linux-amd64 ;; \
-        arm64) GH_ARCH=linux-arm64 ;; \
+        amd64) GH_ARCH=linux_amd64 ;; \
+        arm64) GH_ARCH=linux_arm64 ;; \
         *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     gh_f="/var/cache/downloads/gh_${GH_VERSION}_${GH_ARCH}.tar.gz"; \
