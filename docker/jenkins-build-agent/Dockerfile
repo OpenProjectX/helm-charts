@@ -239,7 +239,7 @@ RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
         curl -fsSL -o "$gh_f.part" "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION#v}_${GH_ARCH}.tar.gz"; \
         mv "$gh_f.part" "$gh_f"; \
     fi; \
-    tar -xzf "$gh_f" -C /tmp --strip-components=1 "gh_${GH_VERSION#v}_${GH_ARCH}/bin/gh"; \
+    tar -xzf "$gh_f" -C /tmp --strip-components=2 "gh_${GH_VERSION#v}_${GH_ARCH}/bin/gh"; \
     install -m 0755 /tmp/gh /usr/local/bin/gh; \
     rm -f /tmp/gh; \
     ansible --version | head -1; \
