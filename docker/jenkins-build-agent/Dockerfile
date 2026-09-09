@@ -9,7 +9,7 @@
 #       export PATH="$NODE24_HOME/bin:$PATH"
 #   - Bun 1.4 (default on PATH)
 #   - Docker 29 daemon/CLI + Buildx for privileged Docker-in-Docker builds and Testcontainers tests
-#   - Helm 3 + kubectl for in-cluster Kubernetes deployments
+#   - Helm 3 + kubectl + helmfile for in-cluster Kubernetes deployments
 #
 # Gradle and Maven are intentionally NOT installed: repos bring their own
 # wrapper (./gradlew, ./mvnw), cached on the gradle-cache PVC.
@@ -21,6 +21,7 @@
 ARG BUILDX_VERSION=0.35.0
 ARG HELM_VERSION=3.21.0
 ARG KUBECTL_VERSION=1.36.1
+ARG HELMFILE_VERSION=1.7.4
 
 FROM docker/buildx-bin:${BUILDX_VERSION} AS buildx
 
@@ -30,6 +31,7 @@ ARG TARGETARCH=amd64
 ARG BUILDX_VERSION=0.35.0
 ARG HELM_VERSION=3.21.0
 ARG KUBECTL_VERSION=1.36.1
+ARG HELMFILE_VERSION=1.7.4
 ARG NODE22_VERSION=22.23.1
 ARG NODE24_VERSION=24.18.0
 ARG BUN_VERSION=1.4.1
@@ -198,8 +200,17 @@ RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
         mv "$kubectl_f.part" "$kubectl_f"; \
     fi; \
     install -m 0755 "$kubectl_f" /usr/local/bin/kubectl; \
+    helmfile_f="/var/cache/downloads/helmfile_${HELMFILE_VERSION}_linux_${TOOL_ARCH}.tar.gz"; \
+    if [ ! -s "$helmfile_f" ]; then \
+        curl -fsSL -o "$helmfile_f.part" "https://github.com/helmfile/helmfile/releases/download/v${HELMFILE_VERSION}/helmfile_${HELMFILE_VERSION}_linux_${TOOL_ARCH}.tar.gz"; \
+        mv "$helmfile_f.part" "$helmfile_f"; \
+    fi; \
+    tar -xzf "$helmfile_f" -C /tmp helmfile; \
+    install -m 0755 /tmp/helmfile /usr/local/bin/helmfile; \
+    rm -f /tmp/helmfile; \
     helm version --client; \
-    kubectl version --client=true
+    kubectl version --client=true; \
+    helmfile --version
 
 RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
     set -eux; \
@@ -235,6 +246,7 @@ RUN set -eux; \
     docker buildx version; \
     dockerd --version; \
     helm version --client; \
-    kubectl version --client=true
+    kubectl version --client=true; \
+    helmfile --version
 
 ENTRYPOINT ["jenkins-dind-entrypoint.sh"]
