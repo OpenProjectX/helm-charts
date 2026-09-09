@@ -10,6 +10,8 @@
 #   - Bun 1.4 (default on PATH)
 #   - Docker 29 daemon/CLI + Buildx for privileged Docker-in-Docker builds and Testcontainers tests
 #   - Helm 3 + kubectl + helmfile for in-cluster Kubernetes deployments
+#   - Ansible (ansible-core) + openssh-client + gh for VM deploys and
+#     GitHub release publishing
 #
 # Gradle and Maven are intentionally NOT installed: repos bring their own
 # wrapper (./gradlew, ./mvnw), cached on the gradle-cache PVC.
@@ -22,6 +24,8 @@ ARG BUILDX_VERSION=0.35.0
 ARG HELM_VERSION=3.21.0
 ARG KUBECTL_VERSION=1.36.1
 ARG HELMFILE_VERSION=1.7.4
+ARG ANSIBLE_CORE_VERSION=2.21.4
+ARG GH_VERSION=2.100.0
 
 FROM docker/buildx-bin:${BUILDX_VERSION} AS buildx
 
@@ -32,6 +36,8 @@ ARG BUILDX_VERSION=0.35.0
 ARG HELM_VERSION=3.21.0
 ARG KUBECTL_VERSION=1.36.1
 ARG HELMFILE_VERSION=1.7.4
+ARG ANSIBLE_CORE_VERSION=2.21.4
+ARG GH_VERSION=2.100.0
 ARG NODE22_VERSION=22.23.1
 ARG NODE24_VERSION=24.18.0
 ARG BUN_VERSION=1.4.1
@@ -50,8 +56,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         iptables \
         jq \
         kmod \
+        openssh-client \
         openssl \
         pigz \
+        python3 \
+        python3-venv \
         uidmap \
         unzip \
         xfsprogs \
@@ -212,6 +221,30 @@ RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
     kubectl version --client=true; \
     helmfile --version
 
+# Ansible (in an isolated venv) + gh CLI for VM deploys and GitHub releases.
+RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
+    set -eux; \
+    python3 -m venv /opt/ansible; \
+    /opt/ansible/bin/pip install --no-cache-dir "ansible-core==${ANSIBLE_CORE_VERSION}"; \
+    for bin in ansible ansible-playbook ansible-galaxy ansible-vault ansible-config ansible-inventory; do \
+        ln -sf "/opt/ansible/bin/${bin}" "/usr/local/bin/${bin}"; \
+    done; \
+    case "${TARGETARCH}" in \
+        amd64) GH_ARCH=linux-amd64 ;; \
+        arm64) GH_ARCH=linux-arm64 ;; \
+        *) echo "unsupported arch: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac; \
+    gh_f="/var/cache/downloads/gh_${GH_VERSION}_${GH_ARCH}.tar.gz"; \
+    if [ ! -s "$gh_f" ]; then \
+        curl -fsSL -o "$gh_f.part" "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION#v}_${GH_ARCH}.tar.gz"; \
+        mv "$gh_f.part" "$gh_f"; \
+    fi; \
+    tar -xzf "$gh_f" -C /tmp --strip-components=1 "gh_${GH_VERSION#v}_${GH_ARCH}/bin/gh"; \
+    install -m 0755 /tmp/gh /usr/local/bin/gh; \
+    rm -f /tmp/gh; \
+    ansible --version | head -1; \
+    gh --version | head -1
+
 RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
     set -eux; \
     f="/var/cache/downloads/dind-${DIND_COMMIT}"; \
@@ -247,6 +280,8 @@ RUN set -eux; \
     dockerd --version; \
     helm version --client; \
     kubectl version --client=true; \
-    helmfile --version
+    helmfile --version; \
+    ansible --version | head -1; \
+    gh --version | head -1
 
 ENTRYPOINT ["jenkins-dind-entrypoint.sh"]
