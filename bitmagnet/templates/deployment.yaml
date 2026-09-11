@@ -1,0 +1,180 @@
+{{- if and (not .Values.workers.all) (empty .Values.workers.keys) }}
+{{- fail "workers.keys must contain at least one worker when workers.all is false" }}
+{{- end }}
+{{- $postgresHost := required "postgres.host is required" .Values.postgres.host }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bitmagnet.fullname" . }}
+  labels:
+    {{- include "bitmagnet.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  strategy:
+    {{- toYaml .Values.strategy | nindent 4 }}
+  selector:
+    matchLabels:
+      {{- include "bitmagnet.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "bitmagnet.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "bitmagnet.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: bitmagnet
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          args:
+            - worker
+            - run
+            {{- if .Values.workers.all }}
+            - --all
+            {{- else }}
+            {{- range .Values.workers.keys }}
+            - {{ printf "--keys=%s" . | quote }}
+            {{- end }}
+            {{- end }}
+          env:
+            - name: POSTGRES_HOST
+              value: {{ $postgresHost | quote }}
+            - name: POSTGRES_PORT
+              value: {{ .Values.postgres.port | quote }}
+            - name: POSTGRES_NAME
+              value: {{ .Values.postgres.database | quote }}
+            - name: POSTGRES_SSL_MODE
+              value: {{ .Values.postgres.sslMode | quote }}
+            - name: POSTGRES_CONNECTION_TIMEOUT
+              value: {{ .Values.postgres.connectionTimeout | quote }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bitmagnet.postgresSecretName" . }}
+                  key: {{ .Values.postgres.auth.usernameKey }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "bitmagnet.postgresSecretName" . }}
+                  key: {{ .Values.postgres.auth.passwordKey }}
+            - name: TMDB_ENABLED
+              value: {{ .Values.tmdb.enabled | quote }}
+            {{- if .Values.tmdb.existingSecret }}
+            - name: TMDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.tmdb.existingSecret }}
+                  key: {{ .Values.tmdb.apiKeyKey }}
+            {{- end }}
+            - name: LOG_JSON
+              value: {{ .Values.log.json | quote }}
+            - name: DHT_CRAWLER_SERVER_PORT
+              value: {{ .Values.dht.port | quote }}
+            - name: XDG_CONFIG_HOME
+              value: /config
+            - name: XDG_DATA_HOME
+              value: /data
+            - name: XDG_CACHE_HOME
+              value: /cache
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.http.port }}
+              protocol: TCP
+            {{- if .Values.dht.enabled }}
+            - name: dht-tcp
+              containerPort: {{ .Values.dht.port }}
+              protocol: TCP
+            - name: dht-udp
+              containerPort: {{ .Values.dht.port }}
+              protocol: UDP
+            {{- end }}
+          {{- if .Values.probes.liveness.enabled }}
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+          {{- end }}
+          {{- if .Values.probes.readiness.enabled }}
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: data
+              mountPath: /data
+            - name: cache
+              mountPath: /cache
+            - name: tmp
+              mountPath: /tmp
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: config
+          emptyDir: {}
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (include "bitmagnet.fullname" .) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: cache
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}

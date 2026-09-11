@@ -1,0 +1,127 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/bitmagnet-io/bitmagnet
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: false
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 1000
+  fsGroupChangePolicy: OnRootMismatch
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsGroup: 1000
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Use all upstream workers or select individual workers. The HTTP worker must
+# be present for the Service and probes to work.
+workers:
+  all: true
+  keys: []
+
+postgres:
+  host: ""
+  port: 5432
+  database: bitmagnet
+  sslMode: require
+  connectionTimeout: 5s
+  auth:
+    # Prefer an operator-managed Secret. When empty, this chart creates one
+    # from username/password below.
+    existingSecret: ""
+    usernameKey: username
+    passwordKey: password
+    username: postgres
+    password: ""
+
+tmdb:
+  enabled: true
+  existingSecret: ""
+  apiKeyKey: api-key
+
+log:
+  json: true
+
+http:
+  port: 3333
+  service:
+    type: ClusterIP
+    port: 3333
+    annotations: {}
+
+dht:
+  enabled: true
+  port: 3334
+  service:
+    enabled: true
+    type: ClusterIP
+    annotations: {}
+    externalTrafficPolicy: ""
+    loadBalancerSourceRanges: []
+
+persistence:
+  enabled: false
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+  annotations: {}
+
+probes:
+  liveness:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 20
+    timeoutSeconds: 3
+    failureThreshold: 3
+  readiness:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 6
+
+serviceMonitor:
+  enabled: false
+  labels: {}
+  interval: 30s
+  scrapeTimeout: 10s
+  path: /metrics
+
+resources: {}
+
+extraEnv: []
+extraEnvFrom: []
+extraVolumes: []
+extraVolumeMounts: []
+
+strategy:
+  type: Recreate
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+priorityClassName: ""
+terminationGracePeriodSeconds: 30
+

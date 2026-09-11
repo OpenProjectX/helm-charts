@@ -1,0 +1,9 @@
+Bitmagnet is available inside the cluster at:
+  http://{{ include "bitmagnet.fullname" . }}.{{ .Release.Namespace }}.svc:{{ .Values.http.service.port }}
+
+{{- if and .Values.dht.enabled (eq .Values.dht.service.type "ClusterIP") }}
+
+The DHT Service is ClusterIP-only. Set dht.service.type to LoadBalancer or
+NodePort if inbound peers must reach TCP/UDP port {{ .Values.dht.port }}.
+{{- end }}
+

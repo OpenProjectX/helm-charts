@@ -1,0 +1,33 @@
+{{- if and .Values.dht.enabled .Values.dht.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bitmagnet.fullname" . }}-dht
+  labels:
+    {{- include "bitmagnet.labels" . | nindent 4 }}
+  {{- with .Values.dht.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.dht.service.type }}
+  {{- with .Values.dht.service.externalTrafficPolicy }}
+  externalTrafficPolicy: {{ . }}
+  {{- end }}
+  {{- with .Values.dht.service.loadBalancerSourceRanges }}
+  loadBalancerSourceRanges:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  ports:
+    - name: dht-tcp
+      port: {{ .Values.dht.port }}
+      targetPort: dht-tcp
+      protocol: TCP
+    - name: dht-udp
+      port: {{ .Values.dht.port }}
+      targetPort: dht-udp
+      protocol: UDP
+  selector:
+    {{- include "bitmagnet.selectorLabels" . | nindent 4 }}
+{{- end }}
+

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: bitmagnet
+description: A configurable Helm chart for Bitmagnet
+type: application
+version: 0.1.0
+appVersion: "v0.10.1"
+home: https://bitmagnet.io
+sources:
+  - https://github.com/bitmagnet-io/bitmagnet
+
