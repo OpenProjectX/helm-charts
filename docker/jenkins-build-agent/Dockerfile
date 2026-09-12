@@ -24,6 +24,7 @@ ARG BUILDX_VERSION=0.35.0
 ARG HELM_VERSION=3.21.0
 ARG KUBECTL_VERSION=1.36.1
 ARG HELMFILE_VERSION=1.7.4
+ARG HELM_DIFF_VERSION=3.15.13
 ARG ANSIBLE_CORE_VERSION=2.21.4
 ARG GH_VERSION=2.100.0
 
@@ -219,7 +220,9 @@ RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
     rm -f /tmp/helmfile; \
     helm version --client; \
     kubectl version --client=true; \
-    helmfile --version
+    helmfile --version; \
+    helm plugin install "https://github.com/databus23/helm-diff" --version "v${HELM_DIFF_VERSION}"; \
+    helm diff version
 
 # Ansible (in an isolated venv) + gh CLI for VM deploys and GitHub releases.
 RUN --mount=type=cache,target=/var/cache/downloads,sharing=locked \
@@ -281,6 +284,7 @@ RUN set -eux; \
     helm version --client; \
     kubectl version --client=true; \
     helmfile --version; \
+    helm diff version; \
     ansible --version | head -1; \
     gh --version | head -1
 
